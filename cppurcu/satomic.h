@@ -1,5 +1,5 @@
 /*
- * AtomicSharedPtr.h
+ * satomic.h
  *
  *  Created on: 2025. 5. 24.
  *      Author: tys

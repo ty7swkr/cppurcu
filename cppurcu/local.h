@@ -1,5 +1,5 @@
 /*
- * RCULocal.h
+ * local.h
  *
  *  Created on: 2025. 10. 25.
  *      Author: tys

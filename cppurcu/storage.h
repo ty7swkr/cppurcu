@@ -43,6 +43,8 @@ public:
     source_ = value;
   }
 
+  // During an update, calling load() again in the same scope
+  // may destroy previously loaded variables.
   CONST_T *load()
   {
     return local_.load();
