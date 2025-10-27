@@ -43,7 +43,7 @@ Simply call load().
 *These tests uses pre-built data structures to measure RCU performance without memory allocation overhead.*<br>
 *Updates occur every 100ms.*
 
-300K items, 10 reader threads, 2 writer threads, 10 seconds:
+#### 300K items, 10 reader threads, 2 writer threads, 10 seconds:
 - Ubuntu 22.04, AMD Ryzen 7 8845HS / 16G
 <table>
   <thead>
@@ -76,7 +76,8 @@ Simply call load().
   </tbody>
 </table>
 <br>
-1M items, 10 reader threads, 2 writer threads, 10 seconds:
+
+#### 1M items, 10 reader threads, 2 writer threads, 10 seconds:
 - Ubuntu 22.04, AMD Ryzen 9 7945HX / 32G
 <table>
   <thead>
@@ -109,7 +110,8 @@ Simply call load().
   </tbody>
 </table>
 <br>
-RedHat 8.7, VM Intel Xeon(Cascadelake) 2.6Ghz / 48G
+
+- RedHat 8.7, VM Intel Xeon(Cascadelake) 2.6Ghz / 48G
 <table>
   <thead>
     <tr>
