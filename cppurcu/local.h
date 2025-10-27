@@ -8,9 +8,7 @@
 #pragma once
 
 #include <cppurcu/source.h>
-#include <cppurcu/retirement_thread.h>
 #include <cppurcu/tls_instance.h>
-#include <atomic>
 
 namespace cppurcu
 {

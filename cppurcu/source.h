@@ -9,13 +9,9 @@
 
 #include <cppurcu/retirement_thread.h>
 #include <cppurcu/satomic.h>
-#include <memory>
 
 namespace cppurcu
 {
-
-// Forward declaration
-class retirement_thread;
 
 template<typename T>
 class source
