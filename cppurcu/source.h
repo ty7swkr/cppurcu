@@ -41,7 +41,7 @@ public:
     auto old = value_.load(std::memory_order_acquire);
 
     value_  .store    (value, std::memory_order_release);
-    version_.fetch_add(1, std::memory_order_release);
+    version_.fetch_add(1,     std::memory_order_release);
 
     if (retirement_ != nullptr)
       retirement_->push(old);
