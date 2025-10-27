@@ -182,8 +182,8 @@ For objects with expensive destructors, you can use a retirement_thread to handl
 auto retirement = std::make_shared<cppurcu::retirement_thread>();
 
 // Create storage with retirement thread
-cppurcu::storage<std::unordered_set<std::string>> storage1(
-  std::make_shared<std::unordered_set<std::string>>(),
+cppurcu::storage<std::set<std::string>> storage1(
+  std::make_shared<std::set<std::string>>(),
   retirement
 );
 
