@@ -156,7 +156,9 @@ Results may vary depending on environment and configuration.
 #include <unordered_map>
 
 // Create a storage with initial data
-auto storage = cppurcu::storage(std::make_shared<std::unordered_map>());
+cppurcu::storage<std::unordered_map<std::string, std::string>> storage(
+  std::make_shared<std::unordered_map<std::string, std::string>>()
+);
 
 // Read (lock-free)
 auto data = storage.load(); // const pointer
@@ -180,22 +182,23 @@ For objects with expensive destructors, you can use a retirement_thread to handl
 auto retirement = std::make_shared<cppurcu::retirement_thread>();
 
 // Create storage with retirement thread
-auto storage1 = cppurcu::storage(
-  std::make_shared<std::unordered_map>(),
+cppurcu::storage<std::unordered_set<std::string>> storage1(
+  std::make_shared<std::unordered_set<std::string>>(),
   retirement
 );
 
 // retirement_thread can be used regardless of template type.
-auto storage2 = cppurcu::storage(
-  std::make_shared<std::vector>(),
+cppurcu::storage<std::vector<int>> storage2(
+  std::make_shared<std::vector<int>>(),
   retirement
 );
 
-// Read and update work the same way
-auto data = storage1.load();
-storage1.update(new_data);
+// Somewhere in the source...(update)
+storage1 = new_data;
 
-// Old objects are destroyed in the background thread
+// calls load, it gets the updated object and the old object is destroyed in the background thread(retirement_thread)
+auto data = storage1.load();
+
 ```
 **Note:** When using retirement_thread, the reader uses the retirement_thread's mutex when updating.
 <br>
