@@ -265,8 +265,8 @@ Creates a new storage with initial data.
 - Thread-safe
 - Returns a pointer to the current data
 - Lock-free read except during updates when using retirement_thread
-- Returned pointer remains valid while the thread's TLS cache is maintained (e.g., before thread exit) or until storage is destroyed.
-Note: Calling load() again in the same scope may destroy previously loaded variables.
+- Returned pointer remains valid while the thread's TLS cache is maintained (e.g., before thread exit) or until storage is destroyed.<br>
+*Note: During an update, calling `load()` again in the same scope may destroy previously loaded variables.*
 
 **`void update(const std::shared_ptr<const T>& value)`**
 - Publishes new data
