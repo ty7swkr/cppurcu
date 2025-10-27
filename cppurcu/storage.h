@@ -23,11 +23,15 @@ public:
 
   storage(const std::shared_ptr<CONST_T> &init_value,
           std::shared_ptr<retirement_thread> retirement = nullptr)
-  : retirement_(retirement), source_(init_value), local_(source_, retirement.get()) {}
+  : retirement_ (retirement),
+    source_     (init_value, retirement.get()),
+    local_      (source_,    retirement.get()) {}
 
   storage(std::shared_ptr<CONST_T> &&init_value,
           std::shared_ptr<retirement_thread> retirement = nullptr)
-  : retirement_(retirement), source_(std::move(init_value)), local_(source_, retirement.get()) {}
+  : retirement_ (retirement),
+    source_     (std::move(init_value), retirement.get()),
+    local_      (source_,               retirement.get()) {}
 
   void update(const std::shared_ptr<CONST_T> &value)
   {
