@@ -300,8 +300,8 @@ Creates a background retirement thread.
 - Queues an object for background destruction
 - Usually called internally by storage::load() when data is updated
 
-**Members:**
-- `std::atomic<std::thread::id> thread_id`: ID of the retirement thread
+**`std::thread::id thread_id() const`**
+- ID of the retirement thread
 <br>
 
 ## How It Works
