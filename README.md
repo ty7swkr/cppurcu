@@ -140,6 +140,12 @@ Simply call load().
       <td>13.9x</td>
       <td>200</td>
     </tr>
+    <tr>
+      <td>liburcu</td>
+      <td>115.4M</td>
+      <td>13.7x</td>
+      <td><font color="red"><b>175</b></font></td> 
+    </tr>
   </tbody>
 </table>
 Results may vary depending on environment and configuration.
@@ -262,7 +268,7 @@ Creates a new storage with initial data.
 
 **Parameters:**
 - `init_value`: Initial data to store
-- `retirement` (optional): retirement_thread instance for background destruction. If nullptr, objects are destroyed in the reader's thread.
+- `retirement` (optional): retirement_thread instance for background destruction. If nullptr, the T object is destroyed in the reader's thread.
 
 #### Methods
 
