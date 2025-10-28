@@ -63,7 +63,7 @@ Simply call load().
     </tr>
     <tr style="font-weight: bold;">
       <td>cppurcu+retirement</td>
-      <td>391.6.5M</td>
+      <td>391.6M</td>
       <td>19.4x</td>
       <td>200</td>
     </tr>
