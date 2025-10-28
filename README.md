@@ -148,7 +148,7 @@ Simply call load().
     </tr>
   </tbody>
 </table>
-Results may vary depending on environment and configuration.
+Results may vary depending on environment and configuration.<br>
 In the 1M items test, both implementations observed similar read throughput.<br>
 In this run, liburcu recorded approximately 175 updates, although this figure may vary depending on the environment and configuration.
 <br>
