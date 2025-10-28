@@ -200,7 +200,7 @@ storage1 = new_data;
 auto data = storage1.load();
 
 ```
-**Note:** When using retirement_thread, the reader uses the retirement_thread's mutex when updating.
+**Note:** When using retirement_thread, the reader uses the retirement_thread's mutex when updating with new data.
 <br>
 <br>
 
