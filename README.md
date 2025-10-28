@@ -73,6 +73,12 @@ Simply call load().
       <td>20.1x</td>
       <td>200</td>
     </tr>
+    <tr>
+      <td>liburcu</td>
+      <td>346.3M</td>
+      <td>17.2x</td>
+      <td>200</td>
+    </tr>
   </tbody>
 </table>
 <br>
@@ -105,6 +111,12 @@ Simply call load().
       <td>cppurcu</td>
       <td>433.4M</td>
       <td>5.4x</td>
+      <td>200</td>
+    </tr>
+    <tr>
+      <td>liburcu</td>
+      <td>344.36M</td>
+      <td>4.3x</td>
       <td>200</td>
     </tr>
   </tbody>
