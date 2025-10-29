@@ -402,7 +402,7 @@ When creating a guard (each `load()` call):
 3. If changed: update cache and pointer (slow path)
 <br>If reclaimer_thread enabled: push old value to reclaimer queue
 
-### Retirement Thread (Optional)
+### Reclaimer Thread (Optional)
 
 When enabled, reclaimer_thread handles object destruction in the background:
 1. storage::load() pushes old values to a double-buffered queue when version changes
