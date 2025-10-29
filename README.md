@@ -185,26 +185,9 @@ auto new_data = std::make_shared<std::unordered_map>();
 storage = new_data; // or storage.update(new_data);
 ```
 ### Snapshot Isolation
-Nested scopes also share the snapshot:
-```cpp
-auto data1 = storage.load();  // Snapshot version 1
-{
-  auto data2 = storage.load(); // Still uses version 1
-}
-```
-Multiple guards within the same scope within the same thread share the same data snapshot
-```cpp
-// Reader thread A
-auto data1 = storage.load();  // Snapshot version 1
+Multiple `storage<T>::load()` calls within the same thread share the same data snapshot, even across complex call chains. The first `load()` determines the version, and all subsequent calls within that scope share the same snapshot.
 
-// (Meanwhile, Writer thread updates)
-// storage.update(new_data);  // Version 2 published
-
-// Reader thread A continues
-auto data2 = storage.load();  // Still uses version 1 (data1 guard active)
-
-```
-When all guards are destroyed, next load() gets the updated version:
+When all guards are destroyed, next load() gets the updated version
 ```cpp
 {
   auto data = storage.load();  // Snapshot version 1

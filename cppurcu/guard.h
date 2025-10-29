@@ -26,6 +26,13 @@ struct tls_value_t
 template<typename T>
 class local;
 
+/**
+ * RAII guard for snapshot isolation
+ *
+ * Multiple storage<T>::load() calls within the same thread share the same data snapshot,
+ * even across complex call chains. The first load() determines the version, and
+ * all subsequent calls within that scope share the same snapshot.
+ */
 template<typename T>
 class guard final
 {
