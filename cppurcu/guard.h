@@ -29,9 +29,9 @@ class local;
 /**
  * RAII guard for snapshot isolation
  *
- * Multiple storage<T>::load() calls within the same thread share the same data snapshot,
- * even across complex call chains. The first load() determines the version, and
- * all subsequent calls within that scope share the same snapshot.
+ * Even when multiple `storage::load()` calls occur across complex call chains within
+ * a specific scope in the same thread, or when data updates occur from other threads,
+ * all read operations within that thread are enforced to see the same data version.
  */
 template<typename T>
 class guard final

@@ -185,7 +185,7 @@ auto new_data = std::make_shared<std::unordered_map>();
 storage = new_data; // or storage.update(new_data);
 ```
 ### Snapshot Isolation
-Multiple `storage<T>::load()` calls within the same thread share the same data snapshot, even across complex call chains. The first `load()` determines the version, and all subsequent calls within that scope share the same snapshot.
+Even when multiple `storage::load()` calls occur across complex call chains within a specific scope in the same thread, or when data updates occur from other threads, all read operations within that thread are enforced to see the same data version.
 
 When all guards are destroyed, next load() gets the updated version
 ```cpp
