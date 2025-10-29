@@ -45,7 +45,7 @@ public:
   }
 
   std::tuple<uint64_t, std::shared_ptr<const_t<T>>>
-  load(uint64_t value_version) const noexcept
+  load(uint64_t value_version) const
   {
     auto version = version_.load(std::memory_order_acquire);
     if (value_version == version)
