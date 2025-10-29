@@ -14,25 +14,26 @@ namespace cppurcu
 {
 
 template<typename T>
+using const_t = std::add_const_t<T>;
+
+template<typename T>
 class source
 {
 public:
-  using CONST_T = std::add_const_t<T>;
-
-  source(const std::shared_ptr<CONST_T> &init_value,
-         retirement_thread              *retirement = nullptr)
+  source(const std::shared_ptr<const_t<T>> &init_value,
+         retirement_thread                 *retirement = nullptr)
   : value_(init_value), retirement_(retirement) {}
 
-  source(      std::shared_ptr<CONST_T> &&init_value,
-               retirement_thread        *retirement = nullptr)
+  source(      std::shared_ptr<const_t<T>> &&init_value,
+               retirement_thread           *retirement = nullptr)
   : value_(std::move(init_value)), retirement_(retirement) {}
 
-  void operator=(const std::shared_ptr<CONST_T> &value)
+  void operator=(const std::shared_ptr<const_t<T>> &value)
   {
     this->update(value);
   }
 
-  void update(const std::shared_ptr<CONST_T> &value)
+  void update(const std::shared_ptr<const_t<T>> &value)
   {
     auto old = value_.load(std::memory_order_acquire);
 
@@ -43,7 +44,7 @@ public:
       retirement_->push(old);
   }
 
-  std::tuple<uint64_t, std::shared_ptr<CONST_T>>
+  std::tuple<uint64_t, std::shared_ptr<const_t<T>>>
   load(uint64_t value_version) const noexcept
   {
     auto version = version_.load(std::memory_order_acquire);
@@ -53,7 +54,7 @@ public:
     return {version, value_.load(std::memory_order_acquire)};
   }
 
-  std::tuple<uint64_t, std::shared_ptr<CONST_T>>
+  std::tuple<uint64_t, std::shared_ptr<const_t<T>>>
   load() const noexcept
   {
     auto version = version_.load(std::memory_order_acquire);
@@ -62,7 +63,7 @@ public:
   }
 
 protected:
-  satomic<CONST_T>      value_;
+  satomic<const_t<T>>      value_;
   std::atomic<uint64_t> version_{0};
   retirement_thread    *retirement_ = nullptr;
 };

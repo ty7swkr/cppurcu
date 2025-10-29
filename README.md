@@ -15,6 +15,7 @@ cppurcu is a header-only C++ library that provides an implementation of the RCU 
 - **Lock-Free Reads**: Implemented so that contention is minimized on the read path after cache warm-up.
 - **Optional Background Destruction**: retirement_thread can offload object destruction to a separate thread, reducing burden on reader threads
 - **Performance**: about 5-15x improvement over mutex-based approaches in tested environments
+- **Snapshot Isolation**: RAII guard pattern for snapshot isolation in the calling thread
 <br>
 
 ## What is cppurcu?
@@ -25,6 +26,7 @@ cppurcu caches thread-local pointers and checks for updates only via a lightweig
 - Cached pointer return when version unchanged
 - Reduces cache line bouncing between CPU cores using thread local storage
 - Efficient performance for read-heavy scenarios
+- Snapshot isolation for consistent reads
 
 ### API Overview
 
@@ -32,7 +34,7 @@ Unlike some RCU implementations that require reader registration, grace period m
 
 ```cpp
 storage = new_storage;      // Update example (shared_ptr:new_storage)
-auto data = storage.load(); // Simple usage   (const pointer)
+auto data = storage.load(); // Returns guard object
 ```
 Simply call load().
 <br>
@@ -44,7 +46,8 @@ Simply call load().
 *Updates occur every 100ms.*
 
 #### 300K items, 10 reader threads, 2 writer threads, 10 seconds:
-- Ubuntu 22.04, AMD Ryzen 7 8845HS / 16G
+- Ubuntu 22.04, AMD Ryzen 7 8845HS / 16G<br>
+*Average of 5 benchmark runs*
 <table>
   <thead>
     <tr>
@@ -57,26 +60,26 @@ Simply call load().
   <tbody>
     <tr>
       <td>std::mutex</td>
-      <td>20.1M</td>
+      <td>20.05M</td>
       <td>1.0x (baseline)</td>
       <td>200</td>
     </tr>
     <tr style="font-weight: bold;">
       <td>cppurcu+retirement</td>
-      <td>391.6M</td>
-      <td>19.4x</td>
+      <td>368.6M</td>
+      <td>18.0x</td>
       <td>200</td>
     </tr>
     <tr style="font-weight: bold;">
       <td>cppurcu</td>
-      <td>404.8M</td>
-      <td>20.1x</td>
+      <td>342.0M</td>
+      <td>16.7x</td>
       <td>200</td>
     </tr>
     <tr>
       <td>liburcu</td>
-      <td>346.3M</td>
-      <td>17.2x</td>
+      <td>358.8M</td>
+      <td>17.5x</td>
       <td>200</td>
     </tr>
   </tbody>
@@ -97,26 +100,26 @@ Simply call load().
   <tbody>
     <tr>
       <td>std::mutex</td>
-      <td>79.22M</td>
+      <td>80.6M</td>
       <td>1.0x (baseline)</td>
       <td>200</td>
     </tr>
     <tr style="font-weight: bold;">
       <td>cppurcu+retirement</td>
-      <td>440.38M</td>
-      <td>5.5x</td>
+      <td>377.2M</td>
+      <td>4.6x</td>
       <td>200</td>
     </tr>
     <tr style="font-weight: bold;">
       <td>cppurcu</td>
-      <td>433.4M</td>
-      <td>5.4x</td>
+      <td>381.7M</td>
+      <td>4.7x</td>
       <td>200</td>
     </tr>
     <tr>
       <td>liburcu</td>
-      <td>344.36M</td>
-      <td>4.3x</td>
+      <td>341.3M</td>
+      <td>4.2x</td>
       <td>200</td>
     </tr>
   </tbody>
@@ -136,27 +139,27 @@ Simply call load().
   <tbody>
     <tr>
       <td>std::mutex</td>
-      <td>6.1M</td>
+      <td>6.6M</td>
       <td>1.0x (baseline)</td>
       <td>200</td>
     </tr>
     <tr style="font-weight: bold;">
       <td>cppurcu+retirement</td>
-      <td>80.6M</td>
-      <td>13.1x</td>
+      <td>76.7M</td>
+      <td>11.6x</td>
       <td>200</td>
     </tr>
     <tr style="font-weight: bold;">
       <td>cppurcu</td>
-      <td>85.6M</td>
-      <td>13.9x</td>
+      <td>75.4M</td>
+      <td>11.4x</td>
       <td>200</td>
     </tr>
     <tr>
       <td>liburcu</td>
-      <td>98.3M</td>
-      <td>16.0x</td>
-      <td><font color="red"><b>175</b></font></td> 
+      <td>79.6M</td>
+      <td>12.0x</td>
+      <td><font color="red"><b>175</b></font></td>
     </tr>
   </tbody>
 </table>
@@ -179,8 +182,8 @@ cppurcu::storage<std::unordered_map<std::string, std::string>> storage(
   std::make_shared<std::unordered_map<std::string, std::string>>()
 );
 
-// Read (lock-free)
-auto data = storage.load(); // const pointer
+// Read (lock-free) - returns a guard object
+auto data = storage.load(); // cppurcu::guard<T>
 if (data->count("key") > 0) {
   // Use the data
 }
@@ -189,6 +192,36 @@ if (data->count("key") > 0) {
 auto new_data = std::make_shared<std::unordered_map>();
 (*new_data)["key"] = "value";
 storage = new_data; // or storage.update(new_data);
+```
+### Snapshot Isolation
+Nested scopes also share the snapshot:
+```cpp
+auto data1 = storage.load();  // Snapshot version 1
+{
+  auto data2 = storage.load(); // Still uses version 1
+}
+```
+Multiple guards within the same scope within the same thread share the same data snapshot
+```cpp
+// Reader thread A
+auto data1 = storage.load();  // Snapshot version 1
+
+// (Meanwhile, Writer thread updates)
+// storage.update(new_data);  // Version 2 published
+
+// Reader thread A continues
+auto data2 = storage.load();  // Still uses version 1 (data1 guard active)
+
+```
+When all guards are destroyed, next load() gets the updated version:
+```cpp
+{
+  auto data = storage.load();  // Snapshot version 1
+} // 'data' Guard destroyed
+storage.update(new_data);      // Update to version 2
+{
+  auto data = storage.load();  // Loads version 2 (no active guards)
+}
 ```
 
 ### With Background Destruction (Optional)
@@ -238,7 +271,6 @@ g++ -I./path/to/cppurcu your_code.cpp
 ### Requirements
 
 - C++17 or later
-- Standard library with `<memory>`, `<atomic>`, `<unordered_map>`
 <br>
 
 ## Building the Tests
@@ -285,12 +317,9 @@ Creates a new storage with initial data.
 
 #### Methods
 
-**`const T* load()`**
+**`guard<T> load()`**
 - Thread-safe
-- Returns a pointer to the current data
-- Lock-free read except during updates when using retirement_thread
-- Returned pointer remains valid while the thread's TLS cache is maintained (e.g., before thread exit) or until storage is destroyed.<br>
-*Note: During an update, calling `load()` again in the same scope may destroy previously loaded variables.*
+- Returns a guard object that provides access to the current data
 
 **`void update(const std::shared_ptr<const T>& value)`**
 - Publishes new data
@@ -299,6 +328,33 @@ Creates a new storage with initial data.
 **`void operator=(const std::shared_ptr<const T>& value)`**
 - Convenience operator for updates
 - Equivalent to `update(value)`
+
+### `cppurcu::guard<T>`
+
+RAII guard object returned by `storage<T>::load()`.
+
+#### Characteristics
+- **Cannot be copied or moved** - thread-local access only
+- **Smart pointer interface** - use `operator->` to access data
+- **Automatic lifetime management** - data remains valid while guard exists
+- **Snapshot isolation** - multiple guards in same scope share the same data version
+
+#### Methods
+
+**`const T* operator->()`**
+- Provides smart pointer-like access to the data
+
+**`explicit operator bool()`**
+- Checks if the guard holds valid data
+
+#### Example
+```cpp
+auto guard = storage.load();
+if (guard) {
+  guard->method();  // Safe access via operator->
+}
+// Guard destroyed here, data may be updated by next load()
+```
 
 ### `cppurcu::retirement_thread`
 
@@ -328,9 +384,10 @@ Creates a background retirement thread.
 cppurcu uses a multi-layer approach:
 
 1. **`source<T>`**: Maintains the authoritative data and version counter
-2. **`local<T>`**: Thread-local cache with version tracking
-3. **`storage<T>`**: User-facing API combining both
-4. **`retirement_thread`** (optional): Background thread for `<T>` object destruction
+2. **`local<T>`**: Thread-local caching
+3. **`guard<T>`**: Return value of storage<T>::load(), RAII guard for snapshot isolation
+4. **`storage<T>`**: User-facing API integrating source, local, and guard
+5. **`retirement_thread`** (optional): Background thread for `<T>` object destruction
 
 This design does not use:
 - ABA problem solutions (no tagged pointers)
@@ -339,8 +396,8 @@ This design does not use:
 
 ### Read Path
 
-On each `load()`:
-1. Check cached version against source version
+When creating a guard (each `load()` call):
+1. Check cached version against source version (skipped if guard<T>.ref_count > 0 for snapshot isolation)
 2. If unchanged: return cached pointer (fast path)
 3. If changed: update cache and pointer (slow path)
 <br>If retirement_thread enabled: push old value to retirement queue
@@ -365,6 +422,6 @@ The included tests compare three approaches:
 Run tests with different data sizes:
 ```bash
 ./rcu_bench 1000      # 1K items
-./rcu_bench 100000    # 100K items  
+./rcu_bench 100000    # 100K items
 ./rcu_bench 1000000   # 1M items, Memory required is 20G
 ```
