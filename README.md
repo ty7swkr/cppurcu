@@ -16,17 +16,8 @@ cppurcu is a header-only C++ library that provides an implementation of the RCU 
 - **Optional Background Destruction**: reclaimer_thread can offload object destruction to a separate thread, reducing burden on reader threads
 - **Performance**: about 4-15x improvement over mutex-based approaches in tested environments
 - **Snapshot Isolation**: RAII guard pattern for snapshot isolation in the calling thread
+- **No Data Duplication**: Data is not deep-copied per thread
 <br>
-
-## What is cppurcu?
-
-Traditional synchronization mechanisms like mutexes cause contention between readers and writers. In cppurcu, reads are not blocked even during updates.
-
-cppurcu caches thread-local pointers and checks for updates only via a lightweight version counter.
-- Cached pointer return when version unchanged
-- Reduces cache line bouncing between CPU cores using thread local storage
-- Efficient performance for read-heavy scenarios
-- Snapshot isolation for consistent reads
 
 ### API Overview
 
@@ -389,7 +380,7 @@ Creates a background reclaimer thread.
 cppurcu uses a multi-layer approach:
 
 1. **`source<T>`**: Maintains the authoritative data and version counter
-2. **`local<T>`**: Thread-local caching
+2. **`local<T>`**: Thread-local caching (shallow copy only)
 3. **`guard<T>`**: Return value of storage<T>::load(), RAII guard for snapshot isolation
 4. **`storage<T>`**: User-facing API integrating source, local, and guard
 5. **`reclaimer_thread`** (optional): Background thread for `<T>` object destruction
