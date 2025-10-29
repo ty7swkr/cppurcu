@@ -17,8 +17,8 @@ template<typename T>
 class local
 {
 public:
-  local(const source<T> &source, retirement_thread *retirement = nullptr)
-  : source_(source), retirement_(retirement) {}
+  local(const source<T> &source, reclaimer_thread *reclaimer = nullptr)
+  : source_(source), reclaimer_(reclaimer) {}
   ~local() {}
 
   guard<T> load()
@@ -33,7 +33,7 @@ public:
       tls_value.value   = new_source;
     }
 
-    return guard<T>(tls_value, source_, retirement_);
+    return guard<T>(tls_value, source_, reclaimer_);
   }
 
 protected:
@@ -41,7 +41,7 @@ protected:
   tls_instance<tls_value_t<T>> tls_value_;
 
   const source<T>   &source_;
-  retirement_thread *retirement_ = nullptr;
+  reclaimer_thread *reclaimer_ = nullptr;
 };
 
 }

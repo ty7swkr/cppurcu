@@ -1,7 +1,7 @@
 /*
  * guard.h
  *
- *  Created on: 2025. 10. 29.
+ *  Created on: 2025. 10. 28.
  *      Author: tys
  */
 
@@ -37,15 +37,15 @@ public:
   ~guard() { --tls_value_.ref_count; }
 
   // Pointer-like access
-  const_t<T> *operator->() const noexcept { return tls_value_.ptr; }
+  const_t<T> *operator->() const noexcept { return tls_value_.ptr;    }
   const_t<T> &operator* () const noexcept { return *(tls_value_.ptr); }
   explicit operator bool() const noexcept { return tls_value_.ptr != nullptr; }
 
 protected:
   friend class local<T>;
 
-  guard(tls_value_t<T> &tls_value, const source<T> &source, retirement_thread *retirement = nullptr)
-  : tls_value_(tls_value), source_(source), retirement_(retirement)
+  guard(tls_value_t<T> &tls_value, const source<T> &source, reclaimer_thread *reclaimer = nullptr)
+  : tls_value_(tls_value), source_(source), reclaimer_(reclaimer)
   {
     if (tls_value_.ref_count++ > 0)
       return;
@@ -56,7 +56,7 @@ protected:
       // Raw pointer update only when version changes, Fast Path
       tls_value_.version = new_version;
       tls_value_.ptr     = new_source.get();
-      if (retirement_ != nullptr) retirement_->push(tls_value_.value);
+      if (reclaimer_ != nullptr) reclaimer_->push(tls_value_.value);
       tls_value_.value   = std::move(new_source);
     }
   }
@@ -64,7 +64,7 @@ protected:
 private:
   tls_value_t<T>    &tls_value_;
   const source<T>   &source_;
-  retirement_thread *retirement_ = nullptr;
+  reclaimer_thread  *reclaimer_ = nullptr;
 };
 
 }

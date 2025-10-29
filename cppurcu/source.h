@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <cppurcu/retirement_thread.h>
+#include <cppurcu/reclaimer_thread.h>
 #include <cppurcu/satomic.h>
 
 namespace cppurcu
@@ -21,12 +21,12 @@ class source
 {
 public:
   source(const std::shared_ptr<const_t<T>> &init_value,
-         retirement_thread                 *retirement = nullptr)
-  : value_(init_value), retirement_(retirement) {}
+         reclaimer_thread                  *reclaimer = nullptr)
+  : value_(init_value), reclaimer_(reclaimer) {}
 
   source(      std::shared_ptr<const_t<T>> &&init_value,
-               retirement_thread           *retirement = nullptr)
-  : value_(std::move(init_value)), retirement_(retirement) {}
+               reclaimer_thread            *reclaimer = nullptr)
+  : value_(std::move(init_value)), reclaimer_(reclaimer) {}
 
   void operator=(const std::shared_ptr<const_t<T>> &value)
   {
@@ -40,8 +40,8 @@ public:
     value_  .store    (value, std::memory_order_release);
     version_.fetch_add(1,     std::memory_order_release);
 
-    if (retirement_ != nullptr)
-      retirement_->push(old);
+    if (reclaimer_ != nullptr)
+      reclaimer_->push(old);
   }
 
   std::tuple<uint64_t, std::shared_ptr<const_t<T>>>
@@ -63,9 +63,9 @@ public:
   }
 
 protected:
-  satomic<const_t<T>>      value_;
+  satomic<const_t<T>>   value_;
   std::atomic<uint64_t> version_{0};
-  retirement_thread    *retirement_ = nullptr;
+  reclaimer_thread      *reclaimer_ = nullptr;
 };
 
 }

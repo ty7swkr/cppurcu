@@ -20,16 +20,16 @@ class storage
 {
 public:
   storage(const std::shared_ptr<const_t<T>> &init_value,
-          std::shared_ptr<retirement_thread> retirement = nullptr)
-  : retirement_ (retirement),
-    source_     (init_value, retirement.get()),
-    local_      (source_,    retirement.get()) {}
+          std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
+  : reclaimer_ (reclaimer),
+    source_     (init_value, reclaimer.get()),
+    local_      (source_,    reclaimer.get()) {}
 
-  storage(std::shared_ptr<const_t<T>> &&init_value,
-          std::shared_ptr<retirement_thread> retirement = nullptr)
-  : retirement_ (retirement),
-    source_     (std::move(init_value), retirement.get()),
-    local_      (source_,               retirement.get()) {}
+  storage(std::shared_ptr<const_t<T>>       &&init_value,
+          std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
+  : reclaimer_ (reclaimer),
+    source_     (std::move(init_value), reclaimer.get()),
+    local_      (source_,               reclaimer.get()) {}
 
   void update(const std::shared_ptr<const_t<T>> &value)
   {
@@ -49,7 +49,7 @@ public:
   }
 
 private:
-  std::shared_ptr<retirement_thread> retirement_ = nullptr;
+  std::shared_ptr<reclaimer_thread> reclaimer_ = nullptr;
   source<T> source_;
   local <T> local_;
 };

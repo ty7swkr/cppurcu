@@ -391,7 +391,7 @@ class CPPURCURetirementContainer
 public:
   CPPURCURetirementContainer()
   : ips_(std::make_shared<unordered_map<string, string>>(),
-         std::make_shared<cppurcu::retirement_thread>())
+         std::make_shared<cppurcu::reclaimer_thread>())
   {
   }
 
@@ -410,7 +410,7 @@ private:
   cppurcu::storage<unordered_map<string, string>> ips_;
 };
 
-void benchmark_retirement(
+void benchmark_reclaimer(
     size_t num_readers,
     size_t num_writers,
     seconds test_duration,
@@ -418,7 +418,7 @@ void benchmark_retirement(
     const vector<pair<string, string>> &test_ips)
 {
   cout << "\n========================================\n";
-  cout << "cppurcu + retirement_thread\n";
+  cout << "cppurcu + reclaimer_thread\n";
   cout << "========================================\n";
   cout << "Reader thread  : " << num_readers << "\n";
   cout << "Writer thread  : " << num_writers << "\n";
@@ -525,7 +525,7 @@ int main(int argc, char **argv)
 
   // std::mutex test
   benchmark_mutex     (num_readers, num_writers, test_duration, test_data_array, test_ips);
-  benchmark_retirement(num_readers, num_writers, test_duration, test_data_array, test_ips);
+  benchmark_reclaimer (num_readers, num_writers, test_duration, test_data_array, test_ips);
   benchmark_cppurcu   (num_readers, num_writers, test_duration, test_data_array, test_ips);
   benchmark_liburcu   (num_readers, num_writers, test_duration, test_data_array, test_ips);
 

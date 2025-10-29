@@ -1,5 +1,5 @@
 /*
- * retirement_thread.h
+ * reclaimer_thread.h
  *
  *  Created on: 2025. 10. 26.
  *      Author: tys
@@ -19,10 +19,10 @@
 namespace cppurcu
 {
 
-class retirement_thread
+class reclaimer_thread
 {
 public:
-  retirement_thread(bool wait_until_execution = false) : stop_(false)
+  reclaimer_thread(bool wait_until_execution = false) : stop_(false)
   {
     front_queue_.reserve(100);
     back_queue_ .reserve(100);
@@ -33,12 +33,12 @@ public:
       create_worker_and_wait();
   }
 
-  retirement_thread(const retirement_thread &) = delete;
-  retirement_thread(retirement_thread &&) = delete;
-  retirement_thread &operator=(const retirement_thread &) = delete;
-  retirement_thread &operator=(retirement_thread &&) = delete;
+  reclaimer_thread(const reclaimer_thread &) = delete;
+  reclaimer_thread(reclaimer_thread &&) = delete;
+  reclaimer_thread &operator=(const reclaimer_thread &) = delete;
+  reclaimer_thread &operator=(reclaimer_thread &&) = delete;
 
-  virtual ~retirement_thread()
+  virtual ~reclaimer_thread()
   {
     stop_.store(true, std::memory_order_release);
 

@@ -13,7 +13,7 @@ cppurcu is a header-only C++ library that provides an implementation of the RCU 
 
 - **Header-Only**: Works with standard library only, no external dependencies
 - **Lock-Free Reads**: Implemented so that contention is minimized on the read path after cache warm-up.
-- **Optional Background Destruction**: retirement_thread can offload object destruction to a separate thread, reducing burden on reader threads
+- **Optional Background Destruction**: reclaimer_thread can offload object destruction to a separate thread, reducing burden on reader threads
 - **Performance**: about 5-15x improvement over mutex-based approaches in tested environments
 - **Snapshot Isolation**: RAII guard pattern for snapshot isolation in the calling thread
 <br>
@@ -65,7 +65,7 @@ Simply call load().
       <td>200</td>
     </tr>
     <tr style="font-weight: bold;">
-      <td>cppurcu+retirement</td>
+      <td>cppurcu+reclaimer</td>
       <td>368.6M</td>
       <td>18.0x</td>
       <td>200</td>
@@ -105,7 +105,7 @@ Simply call load().
       <td>200</td>
     </tr>
     <tr style="font-weight: bold;">
-      <td>cppurcu+retirement</td>
+      <td>cppurcu+reclaimer</td>
       <td>377.2M</td>
       <td>4.6x</td>
       <td>200</td>
@@ -144,7 +144,7 @@ Simply call load().
       <td>200</td>
     </tr>
     <tr style="font-weight: bold;">
-      <td>cppurcu+retirement</td>
+      <td>cppurcu+reclaimer</td>
       <td>76.7M</td>
       <td>11.6x</td>
       <td>200</td>
@@ -226,33 +226,33 @@ storage.update(new_data);      // Update to version 2
 
 ### With Background Destruction (Optional)
 
-For objects with expensive destructors, you can use a retirement_thread to handle destruction in the background:
+For objects with expensive destructors, you can use a reclaimer_thread to handle destruction in the background:
 ```cpp
 #include <cppurcu/cppurcu.h>
 
-// Create a retirement thread
-auto retirement = std::make_shared<cppurcu::retirement_thread>();
+// Create a reclaimer thread
+auto reclaimer = std::make_shared<cppurcu::reclaimer_thread>();
 
-// Create storage with retirement thread
+// Create storage with reclaimer thread
 cppurcu::storage<std::set<std::string>> storage1(
   std::make_shared<std::set<std::string>>(),
-  retirement
+  reclaimer
 );
 
-// retirement_thread can be used regardless of template type.
+// reclaimer_thread can be used regardless of template type.
 cppurcu::storage<std::vector<int>> storage2(
   std::make_shared<std::vector<int>>(),
-  retirement
+  reclaimer
 );
 
 // Somewhere in the source...(update)
 storage1 = new_data;
 
-// calls load, it gets the updated object and the old object is destroyed in the background thread(retirement_thread)
+// calls load, it gets the updated object and the old object is destroyed in the background thread(reclaimer_thread)
 auto data = storage1.load();
 
 ```
-**Note:** When using retirement_thread, the reader uses the retirement_thread's mutex when updating with new data.
+**Note:** When using reclaimer_thread, the reader uses the reclaimer_thread's mutex when updating with new data.
 <br>
 <br>
 
@@ -304,16 +304,16 @@ Main class for RCU-protected data storage.
 #### Constructor
 ```cpp
 storage(const std::shared_ptr<const T>& init_value,
-        std::shared_ptr<retirement_thread> retirement = nullptr)
+        std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
 
 storage(std::shared_ptr<const T>&& init_value,
-        std::shared_ptr<retirement_thread> retirement = nullptr)
+        std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
 ```
 Creates a new storage with initial data.
 
 **Parameters:**
 - `init_value`: Initial data to store
-- `retirement` (optional): retirement_thread instance for background destruction. If nullptr, the T object is destroyed in the reader's thread.
+- `reclaimer` (optional): reclaimer_thread instance for background destruction. If nullptr, the T object is destroyed in the reader's thread.
 
 #### Methods
 
@@ -356,18 +356,18 @@ if (guard) {
 // Guard destroyed here, data may be updated by next load()
 ```
 
-### `cppurcu::retirement_thread`
+### `cppurcu::reclaimer_thread`
 
 Background thread for handling object destruction.
 
 #### Constructor
 ```cpp
-retirement_thread(bool wait_until_execution = false)
+reclaimer_thread(bool wait_until_execution = false)
 ```
-Creates a background retirement thread.
+Creates a background reclaimer thread.
 
 **Parameters:**
-- `wait_until_execution` (optional): If true, constructor waits until the retirement thread starts. If false, returns immediately.
+- `wait_until_execution` (optional): If true, constructor waits until the reclaimer thread starts. If false, returns immediately.
 
 #### Methods
 
@@ -376,7 +376,7 @@ Creates a background retirement thread.
 - Usually called internally by storage::load() when data is updated
 
 **`std::thread::id thread_id() const`**
-- ID of the retirement thread
+- ID of the reclaimer thread
 <br>
 
 ## How It Works
@@ -387,12 +387,12 @@ cppurcu uses a multi-layer approach:
 2. **`local<T>`**: Thread-local caching
 3. **`guard<T>`**: Return value of storage<T>::load(), RAII guard for snapshot isolation
 4. **`storage<T>`**: User-facing API integrating source, local, and guard
-5. **`retirement_thread`** (optional): Background thread for `<T>` object destruction
+5. **`reclaimer_thread`** (optional): Background thread for `<T>` object destruction
 
 This design does not use:
 - ABA problem solutions (no tagged pointers)
 - Hazard pointers
-- Epoch-based reclamation
+- Epoch-based reclaimer
 
 ### Read Path
 
@@ -400,11 +400,11 @@ When creating a guard (each `load()` call):
 1. Check cached version against source version (skipped if guard<T>.ref_count > 0 for snapshot isolation)
 2. If unchanged: return cached pointer (fast path)
 3. If changed: update cache and pointer (slow path)
-<br>If retirement_thread enabled: push old value to retirement queue
+<br>If reclaimer_thread enabled: push old value to reclaimer queue
 
 ### Retirement Thread (Optional)
 
-When enabled, retirement_thread handles object destruction in the background:
+When enabled, reclaimer_thread handles object destruction in the background:
 1. storage::load() pushes old values to a double-buffered queue when version changes
 2. Background thread periodically swaps and clears the queue
 3. Objects are destroyed without blocking readers
