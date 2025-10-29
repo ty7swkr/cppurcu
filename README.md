@@ -217,10 +217,15 @@ When all guards are destroyed, next load() gets the updated version:
 ```cpp
 {
   auto data = storage.load();  // Snapshot version 1
+  {
+    auto data1 = stroage.load(); // Snapshot version 1
+  } // data1 guasrd destroyed
 } // 'data' Guard destroyed
+
 storage.update(new_data);      // Update to version 2
+
 {
-  auto data = storage.load();  // Loads version 2 (no active guards)
+  auto data = storage.load();  // Loads version 2
 }
 ```
 
