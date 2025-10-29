@@ -14,7 +14,7 @@ cppurcu is a header-only C++ library that provides an implementation of the RCU 
 - **Header-Only**: Works with standard library only, no external dependencies
 - **Lock-Free Reads**: Implemented so that contention is minimized on the read path after cache warm-up.
 - **Optional Background Destruction**: reclaimer_thread can offload object destruction to a separate thread, reducing burden on reader threads
-- **Performance**: about 5-15x improvement over mutex-based approaches in tested environments
+- **Performance**: about 4-15x improvement over mutex-based approaches in tested environments
 - **Snapshot Isolation**: RAII guard pattern for snapshot isolation in the calling thread
 <br>
 
