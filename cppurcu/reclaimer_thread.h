@@ -73,7 +73,7 @@ protected:
       }
 
       front_queue_.clear();
-      std::this_thread::sleep_for(std::chrono::microseconds(100));
+      std::this_thread::sleep_for(std::chrono::microseconds(10000));
     }
 
     std::lock_guard<std::mutex> lock(mutex_);
