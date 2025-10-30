@@ -351,8 +351,8 @@ This design does not use:
 
 When creating a guard (each `load()` call):
 1. Check cached version against source version (skipped if guard<T>.ref_count > 0 for snapshot isolation)
-2. If unchanged: return cached pointer (fast path)
-3. If changed: update cache and pointer (slow path)
+2. If unchanged: return cached raw pointer (fast path)
+3. If changed: update cache, version, shared_ptr and raw pointer (slow path)
 <br>If reclaimer_thread enabled: push old value to reclaimer queue
 
 ### Reclaimer Thread (Optional)
