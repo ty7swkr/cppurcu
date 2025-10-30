@@ -5,29 +5,23 @@ A simple implementation of the C++ RCU (read-copy-update) user-space library tha
 <br>
 <br>
 
-## Overview
-
-cppurcu is a header-only C++ library that provides an implementation of the RCU pattern for read-heavy workloads.
-
-### Key Features
+## Key Features
 
 - **Header-Only**: Works with standard library only, no external dependencies
 - **Lock-Free Reads**: Implemented so that contention is minimized on the read path after cache warm-up.
-- **Optional Background Destruction**: reclaimer_thread can offload object destruction to a separate thread, reducing burden on reader threads
 - **Snapshot Isolation**: RAII guard pattern for snapshot isolation in the calling thread
 - **No Data Duplication**: Data is not deep-copied per thread
+- **Optional Background Destruction**: reclaimer_thread can offload object destruction to a separate thread, reducing burden on reader threads
 <br>
 
-### API Overview
+## API Overview
 
-Unlike some RCU implementations that require reader registration, grace period management, and memory barriers, cppurcu provides an interface without them.
+No reader registration, grace period management, or memory barriers required.
 
 ```cpp
 storage = new_storage;      // Update example (shared_ptr:new_storage)
 auto data = storage.load(); // Returns guard object
 ```
-Simply call load().
-<br>
 <br>
 
 ## Performance
@@ -58,12 +52,6 @@ Simply call load().
       <td>cppurcu+reclaimer</td>
       <td>368.6M</td>
       <td>18.0x</td>
-      <td>200</td>
-    </tr>
-    <tr style="font-weight: bold;">
-      <td>cppurcu</td>
-      <td>342.0M</td>
-      <td>16.7x</td>
       <td>200</td>
     </tr>
     <tr>
@@ -100,12 +88,6 @@ Simply call load().
       <td>4.6x</td>
       <td>200</td>
     </tr>
-    <tr style="font-weight: bold;">
-      <td>cppurcu</td>
-      <td>381.7M</td>
-      <td>4.7x</td>
-      <td>200</td>
-    </tr>
     <tr>
       <td>liburcu</td>
       <td>341.3M</td>
@@ -139,17 +121,11 @@ Simply call load().
       <td>11.6x</td>
       <td>200</td>
     </tr>
-    <tr style="font-weight: bold;">
-      <td>cppurcu</td>
-      <td>75.4M</td>
-      <td>11.4x</td>
-      <td>200</td>
-    </tr>
     <tr>
       <td>liburcu</td>
       <td>79.6M</td>
       <td>12.0x</td>
-      <td><font color="red"><b>175</b></font></td>
+      <td>175</font></td>
     </tr>
   </tbody>
 </table>
@@ -311,11 +287,10 @@ Creates a new storage with initial data.
 
 RAII guard object returned by `storage<T>::load()`.
 
-#### Characteristics
-- **Cannot be copied or moved** - thread-local access only
-- **Smart pointer interface** - use `operator->` to access data
-- **Automatic lifetime management** - data remains valid while guard exists
-- **Snapshot isolation** - multiple guards in same scope share the same data version
+#### Notes
+- Cannot be copied or moved (thread-local only)
+- Data remains valid while guard exists
+- Multiple guards share the same snapshot
 
 #### Methods
 
@@ -361,10 +336,10 @@ Creates a background reclaimer thread.
 
 cppurcu uses a multi-layer approach:
 
-1. **`source<T>`**: Maintains the authoritative data and version counter
-2. **`local<T>`**: Thread-local caching (shallow copy only)
-3. **`guard<T>`**: Return value of storage<T>::load(), RAII guard for snapshot isolation
-4. **`storage<T>`**: User-facing API integrating source, local, and guard
+1. **`storage<T>`**: User-facing API integrating source, local, and guard
+2. **`guard<T>`**: Return value of storage<T>::load(), RAII guard for snapshot isolation
+3. **`source<T>`**: Maintains the authoritative data and version counter
+4. **`local<T>`**: Thread-local caching (shallow copy only)
 5. **`reclaimer_thread`** (optional): Background thread for `<T>` object destruction
 
 This design does not use:
