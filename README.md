@@ -167,7 +167,7 @@ When all guards are destroyed, next load() gets the updated version
 {
   auto data = storage.load();  // Snapshot version 1
   {
-    auto data1 = stroage.load(); // Snapshot version 1
+    auto data1 = storage.load(); // Snapshot version 1
   } // data1 Guard destroyed
 } // data Guard destroyed
 
