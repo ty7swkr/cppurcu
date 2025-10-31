@@ -21,7 +21,7 @@ class source
 {
 public:
   source(const std::shared_ptr<const_t<T>> &init_value,
-         reclaimer_thread                  *reclaimer = nullptr)
+               reclaimer_thread            *reclaimer = nullptr)
   : value_(init_value), reclaimer_(reclaimer) {}
 
   source(      std::shared_ptr<const_t<T>> &&init_value,
