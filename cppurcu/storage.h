@@ -41,8 +41,6 @@ public:
     source_ = value;
   }
 
-  // During an update, calling load() again in the same scope
-  // may destroy previously loaded variables.
   guard<T> load() noexcept(false)
   {
     return local_.load();
