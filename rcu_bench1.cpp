@@ -184,7 +184,6 @@ void benchmark_cppurcu(
   cout << "test duration  : " << test_duration.count() << " sec\n";
 
   CPPURCUContainer container;
-
   // Set initial data (use the first in the array)
   container.update(test_data_array[0]);
 
@@ -256,30 +255,6 @@ void benchmark_cppurcu(
   cout << "read per second    : " << (total_reads / test_duration.count()) << " reads/sec\n";
 }
 
-class CPPURCURetirementContainer
-{
-public:
-  CPPURCURetirementContainer()
-  : ips_(std::make_shared<unordered_map<string, string>>(),
-         std::make_shared<cppurcu::reclaimer_thread>())
-  {
-  }
-
-  bool contains(const string &ip)
-  {
-    auto ips = ips_.load();
-    return ips->count(ip) > 0;
-  }
-
-  void update(shared_ptr<unordered_map<string, string>> new_ips)
-  {
-    ips_ = std::move(new_ips);
-  }
-
-private:
-  cppurcu::storage<unordered_map<string, string>> ips_;
-};
-
 void benchmark_reclaimer(
     size_t num_readers,
     size_t num_writers,
@@ -294,7 +269,7 @@ void benchmark_reclaimer(
   cout << "Writer thread  : " << num_writers << "\n";
   cout << "test duration  : " << test_duration.count() << " sec\n";
 
-  CPPURCURetirementContainer container;
+  CPPURCUContainer container;
   container.update(test_data_array[0]);
 
   atomic<bool> stop_flag{false};

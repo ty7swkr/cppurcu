@@ -8,7 +8,6 @@
 #pragma once
 
 #include <cppurcu/source.h>
-#include <tuple>
 
 namespace cppurcu
 {
