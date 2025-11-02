@@ -9,6 +9,7 @@
 
 #include <cppurcu/reclaimer_thread.h>
 #include <cppurcu/satomic.h>
+#include <cppurcu/spin_lock.h>
 
 namespace cppurcu
 {
@@ -35,10 +36,14 @@ public:
 
   void update(const std::shared_ptr<const_t<T>> &value)
   {
-    auto old = value_.load(std::memory_order_acquire);
+    std::shared_ptr<const_t<T>> old = nullptr;
+    {
+      std::lock_guard<spin_lock> guard(update_lock_);
+      old = value_.load(std::memory_order_acquire);
 
-    value_  .store    (value, std::memory_order_release);
-    version_.fetch_add(1,     std::memory_order_release);
+      value_  .store    (value, std::memory_order_release);
+      version_.fetch_add(1,     std::memory_order_release);
+    }
 
     if (reclaimer_ != nullptr)
       reclaimer_->push(old);
@@ -63,6 +68,8 @@ public:
   }
 
 protected:
+  mutable spin_lock     update_lock_;
+
   satomic<const_t<T>>   value_;
   std::atomic<uint64_t> version_{0};
   reclaimer_thread      *reclaimer_ = nullptr;

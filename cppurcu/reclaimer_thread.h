@@ -15,6 +15,7 @@
 #include <chrono>
 #include <iostream>
 #include <future>
+#include <algorithm>
 
 namespace cppurcu
 {
@@ -24,8 +25,8 @@ class reclaimer_thread
 public:
   reclaimer_thread(bool wait_until_execution = false) : stop_(false)
   {
-    front_queue_.reserve(100);
-    back_queue_ .reserve(100);
+    front_.reserve(100);
+    back_ .reserve(100);
 
     if (wait_until_execution == false)
       create_worker();
@@ -53,7 +54,7 @@ public:
       return;
 
     std::lock_guard<std::mutex> lock(mutex_);
-    back_queue_.emplace_back(ptr);
+    back_.emplace_back(ptr);
   }
 
   std::thread::id
@@ -69,16 +70,20 @@ protected:
     {
       {
         std::lock_guard<std::mutex> lock(mutex_);
-        std::swap(front_queue_, back_queue_);
+        std::swap(front_, back_);
       }
 
-      front_queue_.clear();
+      front_.erase(
+          std::remove_if(front_.begin(), front_.end(), [](const auto& sptr)
+          { return sptr.unique(); }),
+          front_.end() );
+
       std::this_thread::sleep_for(std::chrono::microseconds(10000));
     }
 
     std::lock_guard<std::mutex> lock(mutex_);
-    back_queue_ .clear();
-    front_queue_.clear();
+    back_ .clear();
+    front_.clear();
   }
 
   void create_worker()
@@ -107,8 +112,8 @@ protected:
 
 protected:
   std::atomic<std::thread::id> thread_id_;
-  std::vector<std::shared_ptr<const void>> front_queue_;
-  std::vector<std::shared_ptr<const void>> back_queue_;
+  std::vector<std::shared_ptr<const void>> front_;
+  std::vector<std::shared_ptr<const void>> back_;
 
 protected:
   std::mutex        mutex_;
