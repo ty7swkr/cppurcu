@@ -30,6 +30,15 @@ public:
                reclaimer_thread            *reclaimer = nullptr)
   : value_(std::move(init_value)), reclaimer_(reclaimer) {}
 
+  ~source()
+  {
+    if (reclaimer_ != nullptr && value_.load() != nullptr)
+    {
+      reclaimer_->push(value_.load());
+      value_.reset();
+    }
+  }
+
   void operator=(const std::shared_ptr<const_t<T>> &value)
   {
     this->update(value);

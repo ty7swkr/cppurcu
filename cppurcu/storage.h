@@ -21,15 +21,15 @@ class storage
 public:
   storage(const std::shared_ptr<const_t<T>> &init_value,
           std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
-  : reclaimer_ (reclaimer),
-    source_     (init_value, reclaimer.get()),
-    local_      (source_,    reclaimer.get()) {}
+  : reclaimer_(reclaimer),
+    source_   (init_value, reclaimer.get()),
+    local_    (source_,    reclaimer.get()) {}
 
   storage(std::shared_ptr<const_t<T>>       &&init_value,
           std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
-  : reclaimer_ (reclaimer),
-    source_     (std::move(init_value), reclaimer.get()),
-    local_      (source_,               reclaimer.get()) {}
+  : reclaimer_(reclaimer),
+    source_   (std::move(init_value), reclaimer.get()),
+    local_    (source_,               reclaimer.get()) {}
 
   void update(const std::shared_ptr<const_t<T>> &value)
   {
