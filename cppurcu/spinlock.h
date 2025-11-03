@@ -1,5 +1,5 @@
 /*
- * spin_lock.h
+ * spinlock.h
  *
  *  Created on: 2025. 11. 1.
  *      Author: tys
@@ -12,10 +12,10 @@
 namespace cppurcu
 {
 
-class spin_lock
+class spinlock
 {
 public:
-  spin_lock() {}
+  spinlock() {}
 
   void lock()
   {

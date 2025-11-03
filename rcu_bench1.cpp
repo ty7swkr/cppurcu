@@ -162,7 +162,7 @@ public:
 
   void update(shared_ptr<unordered_map<string, string>> new_ips)
   {
-    ips_ = new_ips;
+    ips_.update(new_ips);
   }
 
 private:
@@ -184,6 +184,7 @@ void benchmark_cppurcu(
   cout << "test duration  : " << test_duration.count() << " sec\n";
 
   CPPURCUContainer container;
+
   // Set initial data (use the first in the array)
   container.update(test_data_array[0]);
 
@@ -255,6 +256,30 @@ void benchmark_cppurcu(
   cout << "read per second    : " << (total_reads / test_duration.count()) << " reads/sec\n";
 }
 
+class CPPURCURetirementContainer
+{
+public:
+  CPPURCURetirementContainer()
+  : ips_(std::make_shared<unordered_map<string, string>>(),
+         std::make_shared<cppurcu::reclaimer_thread>())
+  {
+  }
+
+  bool contains(const string &ip)
+  {
+    auto ips = ips_.load();
+    return ips->count(ip) > 0;
+  }
+
+  void update(shared_ptr<unordered_map<string, string>> new_ips)
+  {
+    ips_ = std::move(new_ips);
+  }
+
+private:
+  cppurcu::storage<unordered_map<string, string>> ips_;
+};
+
 void benchmark_reclaimer(
     size_t num_readers,
     size_t num_writers,
@@ -269,7 +294,7 @@ void benchmark_reclaimer(
   cout << "Writer thread  : " << num_writers << "\n";
   cout << "test duration  : " << test_duration.count() << " sec\n";
 
-  CPPURCUContainer container;
+  CPPURCURetirementContainer container;
   container.update(test_data_array[0]);
 
   atomic<bool> stop_flag{false};
@@ -327,10 +352,17 @@ void benchmark_reclaimer(
   cout << "read per second    : " << (total_reads / test_duration.count()) << " reads/sec\n";
 }
 
-// main에 추가
-//benchmark_mutex(num_readers, num_writers, test_duration, test_data_array, test_ips);
-//benchmark_cppurcu(num_readers, num_writers, test_duration, test_data_array, test_ips);
-//benchmark_reclaimer(num_readers, num_writers, test_duration, test_data_array, test_ips);
+void flush_cache()
+{
+  const size_t cache_size = 32 * 1024 * 1024;
+  volatile char *dummy = new char[cache_size];
+
+  for (size_t i = 0; i < cache_size; i += 64)
+    dummy[i] = 1;
+
+  delete[] dummy;
+}
+
 // ============================================================================
 // main
 // ============================================================================
@@ -373,8 +405,11 @@ int main(int argc, char **argv)
   cout << "Test data generation completed (200 copies)\n";
 
   // std::mutex test
+  flush_cache();
   benchmark_mutex    (num_readers, num_writers, test_duration, test_data_array, test_ips);
+  flush_cache();
   benchmark_reclaimer(num_readers, num_writers, test_duration, test_data_array, test_ips);
+  flush_cache();
   benchmark_cppurcu  (num_readers, num_writers, test_duration, test_data_array, test_ips);
 
   cout << "\n==================================\n";

@@ -47,6 +47,8 @@ public:
   const_t<T> &operator* () const noexcept { return *(tls_value_.ptr); }
   explicit operator bool() const noexcept { return tls_value_.ptr != nullptr; }
 
+  uint64_t ref_count() const { return tls_value_.ref_count; }
+
 protected:
   friend class local<T>;
 

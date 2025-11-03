@@ -16,12 +16,16 @@ A simple implementation of the C++ RCU (read-copy-update) user-space library tha
 
 ## API Overview
 
-No reader registration, grace period management, or memory barriers required.
-
+No reader registration, grace period management, or memory barriers required.<br>
 ```cpp
 storage = new_storage;      // Update example (shared_ptr:new_storage)
 auto data = storage.load(); // Returns guard object
 ```
+*Note1: Unlike traditional RCU, cppurcu does not directly reclaim the old data,
+but delegates the reclaim to std::shared_ptr. 
+The std::shared_ptr reference to the old object is released upon the first load() call within the scope.
+Therefore, the memory is reclaimed when all references to all shared_ptrs are released.*<br><br>
+*Note2: Consequently, update calls are deadlock-free regardless of their location.*
 <br>
 
 ## Performance
@@ -154,7 +158,7 @@ if (data->count("key") > 0) {
   // Use the data
 }
 
-// Update (immediate, old data reclaimed automatically by shared_ptr)
+// Update (immediate, delegates reclamation to std::shared_ptr)
 auto new_data = std::make_shared<std::unordered_map>();
 (*new_data)["key"] = "value";
 storage = new_data; // or storage.update(new_data);
@@ -274,10 +278,12 @@ Creates a new storage with initial data.
 **`guard<T> load()`**
 - Thread-safe
 - Returns a guard object that provides access to the current data
+- On the first load() within the scope, if there is new data, replace it with the new data and release the shared_ptr of the previous data.
 
 **`void update(const std::shared_ptr<const T>& value)`**
 - Publishes new data
-- Old data is safely reclaimed after all readers finish
+- Deadlocks do not occur even when used concurrently within the same scope as the load() function.
+- cppurcu does not reclaim old data itself; it delegates reclamation to std::shared_ptr.
 
 **`void operator=(const std::shared_ptr<const T>& value)`**
 - Convenience operator for updates
