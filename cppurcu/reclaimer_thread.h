@@ -23,10 +23,14 @@ namespace cppurcu
 class reclaimer_thread
 {
 public:
+  static constexpr size_t capacity = 100;
+  // Threshold for capacity waste ratio to trigger shrink_to_fit (e.g., 1.5 = 150%)
+  static constexpr float  shrink_ratio_threshold = 1.5f;
+
   reclaimer_thread(bool wait_until_execution = false) : stop_(false)
   {
-    front_.reserve(100);
-    back_ .reserve(100);
+    front_.reserve(capacity);
+    back_ .reserve(capacity);
 
     if (wait_until_execution == false)
       create_worker();
@@ -72,6 +76,10 @@ protected:
         std::lock_guard<std::mutex> lock(mutex_);
         std::swap(front_, back_);
       }
+
+      if (front_.size()     > capacity &&
+          front_.capacity() > front_.size() * shrink_ratio_threshold)
+        front_.shrink_to_fit();
 
       front_.erase(
           std::remove_if(front_.begin(), front_.end(), [](const auto& sptr)
