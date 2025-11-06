@@ -294,9 +294,9 @@ Creates a new storage with initial data.
 RAII guard object returned by `storage<T>::load()`.
 
 #### Notes
-- Cannot be copied or moved (thread-local only)
-- Data remains valid while guard exists
-- Multiple guards share the same snapshot
+- Cannot be copied or moved. (thread-local only)
+- Data remains valid while guard exists.
+- Multiple guards nested on the same thread share the same snapshot.
 
 #### Methods
 
