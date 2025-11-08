@@ -37,7 +37,7 @@ public:
   tls_instance& operator=(const tls_instance&)  = delete;
   tls_instance& operator=(tls_instance&&)       = delete;
 
-  virtual ~tls_instance()      { storage_.erase(self_); }
+  virtual ~tls_instance() { storage_.erase(self_); }
 
   virtual T &
   ref() { return storage_[self_]; }
@@ -51,14 +51,14 @@ public:
   ref_const() const { return storage_.at(self_); }
 
 protected:
-  /** @brief Stores the address of the current tls_instance<T> as an integer (used as the key) */
-  uintptr_t self_ = reinterpret_cast<uintptr_t>(this);
+  static inline std::atomic<uint64_t> self_allocator_{0};
+  uint64_t self_ = self_allocator_.fetch_add(1, std::memory_order_relaxed) + 1;
 
   /**
    * @brief Per-thread storage using instance address as key
    * Each thread gets default-initialized values on first access via operator[].
    */
-  static thread_local inline std::unordered_map<uintptr_t, T> storage_;
+  static thread_local inline std::unordered_map<uint64_t, T> storage_;
 };
 
 }

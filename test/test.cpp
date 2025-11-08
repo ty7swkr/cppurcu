@@ -795,128 +795,131 @@ void test_reclaimer()
 {
   TEST_START("ReclamerThreadTest")
 
-  cout << "Main thread ID: " << this_thread::get_id() << "\n";
-
-  // Create reclaimer_thread
-  auto rt = make_shared<reclaimer_thread>(true);
-  cout << "reclaimer_thread ID: " << rt->thread_id() << endl << endl;
-  std::thread::id reclaimer_id = rt->thread_id();
-
-  // Initial object is created. Its destruction is expected on the reclaimer thread because 'store' is destroyed after 'rt' reference is created.
-  storage<TestObject> store(make_shared<TestObject>(100, reclaimer_id), rt);
-
-  cout << "Initial value: " << store.load()->value << "\n\n";
-
-  int final_value = 0;
-
-  // Multiple updates (101 ~ 105)
-  for (int i = 1; i <= 5; ++i)
   {
-    final_value = 100 + i;
-    // Set the expected ID for the new object to the reclaimer thread ID
-    auto new_val = make_shared<TestObject>(final_value, reclaimer_id);
-    store.update(new_val);
-    cout << "Updated to: " << store.load()->value << "\n";
-    this_thread::sleep_for(chrono::milliseconds(150));
+    cout << "Main thread ID: " << this_thread::get_id() << "\n";
+
+    // Create reclaimer_thread
+    auto rt = make_shared<reclaimer_thread>(true);
+    cout << "reclaimer_thread ID: " << rt->thread_id() << endl << endl;
+    std::thread::id reclaimer_id = rt->thread_id();
+
+    // Initial object is created. Its destruction is expected on the reclaimer thread because 'store' is destroyed after 'rt' reference is created.
+    storage<TestObject> store(make_shared<TestObject>(100, reclaimer_id), rt);
+
+    cout << "Initial value: " << store.load()->value << "\n\n";
+
+    int final_value = 0;
+
+    // Multiple updates (101 ~ 105)
+    for (int i = 1; i <= 5; ++i)
+    {
+      final_value = 100 + i;
+      // Set the expected ID for the new object to the reclaimer thread ID
+      auto new_val = make_shared<TestObject>(final_value, reclaimer_id);
+      store.update(new_val);
+      cout << "Updated to: " << store.load()->value << "\n";
+      this_thread::sleep_for(chrono::milliseconds(150));
+    }
+
+    cout << "\nWaiting for reclaimer thread cleanup...\n";
+    this_thread::sleep_for(chrono::milliseconds(500));
+
+    // Final value verification
+    assert(store.load()->value == final_value);
+    // Object destruction thread ID verification is done inside the TestObject destructor.
+
+    cout << "\nFinal value: " << store.load()->value << "\n";
   }
 
-  cout << "\nWaiting for reclaimer thread cleanup...\n";
-  this_thread::sleep_for(chrono::milliseconds(500));
-
-  // Final value verification
-  assert(store.load()->value == final_value);
-  // Object destruction thread ID verification is done inside the TestObject destructor.
-
-  cout << "\nFinal value: " << store.load()->value << "\n";
-
+  cout << "----------------------------------------" << endl;
   TEST_END()
 }
 
 void test_reclaimer_multithread()
 {
   TEST_START("ReclamerMultiThreadTest")
-
-  cout << "Main thread ID: " << this_thread::get_id() << "\n";
-
-  // Create reclaimer_thread
-  auto rt = make_shared<reclaimer_thread>(true);
-  cout << "reclaimer_thread ID: " << rt->thread_id() << "\n\n";
-  std::thread::id reclaimer_id = rt->thread_id();
-
-  // Initial object expects destruction on reclaimer thread
-  storage<TestObject> store(make_shared<TestObject>(0, reclaimer_id), rt);
-
-  atomic<bool> stop{false};
-  atomic<int> read_count{0};
-  atomic<int> write_count{0};
-  atomic<int> last_written_value{0};
-
-  // Reader threads
-  vector<thread> readers;
-  for (int i = 0; i < 5; ++i)
   {
-    readers.emplace_back([&, tid = i]()
+    cout << "Main thread ID: " << this_thread::get_id() << "\n";
+
+    // Create reclaimer_thread
+    auto rt = make_shared<reclaimer_thread>(true);
+    cout << "reclaimer_thread ID: " << rt->thread_id() << "\n\n";
+    std::thread::id reclaimer_id = rt->thread_id();
+
+    // Initial object expects destruction on reclaimer thread
+    storage<TestObject> store(make_shared<TestObject>(0, reclaimer_id), rt);
+
+    atomic<bool> stop{false};
+    atomic<int> read_count{0};
+    atomic<int> write_count{0};
+    atomic<int> last_written_value{0};
+
+    // Reader threads
+    vector<thread> readers;
+    for (int i = 0; i < 5; ++i)
     {
-      cout << "Reader " << tid << " started (thread: "
-           << this_thread::get_id() << ")\n";
-
-      while (!stop.load())
+      readers.emplace_back([&, tid = i]()
       {
-        auto obj = store.load();
-        assert(obj->value >= 0);
-        read_count++;
-        this_thread::sleep_for(chrono::milliseconds(10));
-      }
-    });
-  }
+        cout << "Reader " << tid << " started (thread: "
+             << this_thread::get_id() << ")\n";
 
-  // Writer threads
-  vector<thread> writers;
-  for (int i = 0; i < 1; ++i)
-  {
-    writers.emplace_back([&, tid = i]()
+        while (!stop.load())
+        {
+          auto obj = store.load();
+          assert(obj->value >= 0);
+          read_count++;
+          this_thread::sleep_for(chrono::milliseconds(10));
+        }
+      });
+    }
+
+    // Writer threads
+    vector<thread> writers;
+    for (int i = 0; i < 1; ++i)
     {
-      cout << "Writer " << tid << " started (thread: "
-           << this_thread::get_id() << ")\n";
-
-      int base = tid *1000;
-      int count = 0;
-
-      while (!stop.load())
+      writers.emplace_back([&, tid = i]()
       {
-        last_written_value = base + count;
-        // Set the expected ID for the new object to the reclaimer thread ID
-        auto new_obj = make_shared<TestObject>(base + count, reclaimer_id);
-        store.update(new_obj);
-        write_count++;
-        count++;
-        this_thread::sleep_for(chrono::milliseconds(200));
-      }
-    });
+        cout << "Writer " << tid << " started (thread: "
+             << this_thread::get_id() << ")\n";
+
+        int base = tid *1000;
+        int count = 0;
+
+        while (!stop.load())
+        {
+          last_written_value = base + count;
+          // Set the expected ID for the new object to the reclaimer thread ID
+          auto new_obj = make_shared<TestObject>(base + count, reclaimer_id);
+          store.update(new_obj);
+          write_count++;
+          count++;
+          this_thread::sleep_for(chrono::milliseconds(200));
+        }
+      });
+    }
+
+    cout << "\nRunning for 3 seconds...\n\n";
+    this_thread::sleep_for(chrono::seconds(3));
+
+    stop = true;
+
+    for (auto &t : readers) t.join();
+    for (auto &t : writers) t.join();
+
+    cout << "Test completed!\n";
+    cout << "Total reads : " << read_count << "\n";
+    cout << "Total writes: " << write_count << "\n";
+    cout << "Final value : " << store.load()->value << "\n\n";
+
+    // Verify minimum read/write operations
+    assert(read_count > 10);
+    assert(write_count > 10);
+    assert(store.load()->value == last_written_value);
+
+    cout << "Waiting for reclaimer cleanup...\n";
+    this_thread::sleep_for(chrono::milliseconds(500));
   }
-
-  cout << "\nRunning for 3 seconds...\n\n";
-  this_thread::sleep_for(chrono::seconds(3));
-
-  stop = true;
-
-  for (auto &t : readers) t.join();
-  for (auto &t : writers) t.join();
-
-  cout << "\n======================================\n";
-  cout << "Test completed!\n";
-  cout << "Total reads : " << read_count << "\n";
-  cout << "Total writes: " << write_count << "\n";
-  cout << "Final value : " << store.load()->value << "\n\n";
-
-  // Verify minimum read/write operations
-  assert(read_count > 10);
-  assert(write_count > 10);
-  assert(store.load()->value == last_written_value);
-
-  cout << "Waiting for reclaimer cleanup...\n";
-  this_thread::sleep_for(chrono::milliseconds(500));
-  cout << "Cleanup done!\n";
+  cout << "Cleanup done! ----------------------------------------\n";
 
   TEST_END()
 }
@@ -925,77 +928,78 @@ void test_mixed_types()
 {
   TEST_START("MixedTypesReclamerTest")
 
-  cout << "Main thread ID: " << this_thread::get_id() << "\n";
-
-  // Share a single reclaimer_thread
-  auto rt = make_shared<reclaimer_thread>(true);
-  cout << "reclaimer_thread ID: " << rt->thread_id() << "\n\n";
-  std::thread::id reclaimer_id = rt->thread_id();
-
-  // Initial objects expect destruction on reclaimer thread
-  storage<TypeA> storeA(make_shared<TypeA>(100, reclaimer_id), rt);
-  storage<TypeB> storeB(make_shared<TypeB>("initial", reclaimer_id), rt);
-  storage<TypeC> storeC(make_shared<TypeC>(3.14, reclaimer_id), rt);
-
-  // Initialize thread_local cache via initial load
-  storeA.load();
-  storeB.load();
-  storeC.load();
-
-  cout << "Initial values loaded\n\n";
-
-  int final_A_value = 100;
-  // Update TypeA
-  cout << "--- Updating TypeA ---\n";
-  for (int i = 1; i <= 3; ++i)
   {
-    final_A_value = 100 + i;
-    // Set the expected ID for the new object to the reclaimer thread ID
-    storeA.update(make_shared<TypeA>(final_A_value, reclaimer_id));
+    cout << "Main thread ID: " << this_thread::get_id() << "\n";
+
+    // Share a single reclaimer_thread
+    auto rt = make_shared<reclaimer_thread>(true);
+    cout << "reclaimer_thread ID: " << rt->thread_id() << "\n\n";
+    std::thread::id reclaimer_id = rt->thread_id();
+
+    // Initial objects expect destruction on reclaimer thread
+    storage<TypeA> storeA(make_shared<TypeA>(100, reclaimer_id), rt);
+    storage<TypeB> storeB(make_shared<TypeB>("initial", reclaimer_id), rt);
+    storage<TypeC> storeC(make_shared<TypeC>(3.14, reclaimer_id), rt);
+
+    // Initialize thread_local cache via initial load
     storeA.load();
-    this_thread::sleep_for(chrono::milliseconds(150));
-  }
-
-  string final_B_name = "initial";
-  // Update TypeB
-  cout << "\n--- Updating TypeB ---\n";
-  for (int i = 1; i <= 3; ++i)
-  {
-    final_B_name = "update" + to_string(i);
-    // Set the expected ID for the new object to the reclaimer thread ID
-    storeB.update(make_shared<TypeB>(final_B_name, reclaimer_id));
     storeB.load();
-    this_thread::sleep_for(chrono::milliseconds(150));
-  }
-
-  double final_C_data = 3.14;
-  // Update TypeC
-  cout << "\n--- Updating TypeC ---\n";
-  for (int i = 1; i <= 3; ++i)
-  {
-    final_C_data = 3.14 + i;
-    // Set the expected ID for the new object to the reclaimer thread ID
-    storeC.update(make_shared<TypeC>(final_C_data, reclaimer_id));
     storeC.load();
-    this_thread::sleep_for(chrono::milliseconds(150));
+
+    cout << "Initial values loaded\n\n";
+
+    int final_A_value = 100;
+    // Update TypeA
+    cout << "--- Updating TypeA ---\n";
+    for (int i = 1; i <= 3; ++i)
+    {
+      final_A_value = 100 + i;
+      // Set the expected ID for the new object to the reclaimer thread ID
+      storeA.update(make_shared<TypeA>(final_A_value, reclaimer_id));
+      storeA.load();
+      this_thread::sleep_for(chrono::milliseconds(150));
+    }
+
+    string final_B_name = "initial";
+    // Update TypeB
+    cout << "\n--- Updating TypeB ---\n";
+    for (int i = 1; i <= 3; ++i)
+    {
+      final_B_name = "update" + to_string(i);
+      // Set the expected ID for the new object to the reclaimer thread ID
+      storeB.update(make_shared<TypeB>(final_B_name, reclaimer_id));
+      storeB.load();
+      this_thread::sleep_for(chrono::milliseconds(150));
+    }
+
+    double final_C_data = 3.14;
+    // Update TypeC
+    cout << "\n--- Updating TypeC ---\n";
+    for (int i = 1; i <= 3; ++i)
+    {
+      final_C_data = 3.14 + i;
+      // Set the expected ID for the new object to the reclaimer thread ID
+      storeC.update(make_shared<TypeC>(final_C_data, reclaimer_id));
+      storeC.load();
+      this_thread::sleep_for(chrono::milliseconds(150));
+    }
+
+    cout << "\n--- Waiting for cleanup ---\n";
+    this_thread::sleep_for(chrono::milliseconds(500));
+
+    cout << "\nFinal values:\n";
+    cout << "TypeA: " << storeA.load()->value << "\n";
+    cout << "TypeB: " << storeB.load()->name << "\n";
+    cout << "TypeC: " << storeC.load()->data << "\n";
+
+    // Final value verification
+    assert(storeA.load()->value == final_A_value);
+    assert(storeB.load()->name == final_B_name);
+    assert(abs(storeC.load()->data - final_C_data) < 0.0001);
+    // Object destruction thread ID verification is done inside each object's destructor.
   }
 
-  cout << "\n--- Waiting for cleanup ---\n";
-  this_thread::sleep_for(chrono::milliseconds(500));
-
-  cout << "\nFinal values:\n";
-  cout << "TypeA: " << storeA.load()->value << "\n";
-  cout << "TypeB: " << storeB.load()->name << "\n";
-  cout << "TypeC: " << storeC.load()->data << "\n";
-
-  // Final value verification
-  assert(storeA.load()->value == final_A_value);
-  assert(storeB.load()->name == final_B_name);
-  assert(abs(storeC.load()->data - final_C_data) < 0.0001);
-  // Object destruction thread ID verification is done inside each object's destructor.
-
-  cout << "\nTest completed!\n";
-
+  cout << "Test completed! ----------------------------------------\n";
   TEST_END()
 }
 

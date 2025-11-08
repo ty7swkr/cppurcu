@@ -1,21 +1,21 @@
 /*
  * reclaimer_thread.h
  *
- *  Created on: 2025. 10. 26.
- *      Author: tys
+ * Created on: 2025. 10. 26.
+ * Author: tys
  */
 
 #pragma once
 
 #include <memory>
-#include <vector>
 #include <thread>
 #include <mutex>
 #include <atomic>
-#include <chrono>
-#include <iostream>
 #include <future>
 #include <algorithm>
+#include <condition_variable>
+#include <unordered_set>
+#include <vector>
 
 namespace cppurcu
 {
@@ -23,15 +23,8 @@ namespace cppurcu
 class reclaimer_thread
 {
 public:
-  static constexpr size_t capacity = 100;
-  // Threshold for capacity waste ratio to trigger shrink_to_fit (e.g., 1.5 = 150%)
-  static constexpr float  shrink_ratio_threshold = 1.5f;
-
   reclaimer_thread(bool wait_until_execution = false) : stop_(false)
   {
-    front_.reserve(capacity);
-    back_ .reserve(capacity);
-
     if (wait_until_execution == false)
       create_worker();
     else
@@ -46,6 +39,11 @@ public:
   virtual ~reclaimer_thread()
   {
     stop_.store(true, std::memory_order_release);
+    {
+      std::lock_guard<std::mutex> guard(lock_);
+      notified_ = true;
+      cond_.notify_all();
+    }
 
     if (worker_.joinable())
       worker_.join();
@@ -57,48 +55,58 @@ public:
     if (!ptr)
       return;
 
-    std::lock_guard<std::mutex> lock(mutex_);
-    back_.emplace_back(ptr);
+    std::lock_guard<std::mutex> guard(lock_);
+    ptrs_.insert(ptr);
+
+    if (notified_ == true)
+      return;
+    notified_ = true;
+
+    cond_.notify_one();
   }
 
   std::thread::id
   thread_id() const
   {
-    return thread_id_.load();
+    return thread_id_.load(std::memory_order_acquire);
   }
 
 protected:
   virtual void worker_loop()
   {
-    while (!stop_.load(std::memory_order_acquire))
+    std::vector<std::shared_ptr<const void>> unique_ptrs;
+
+    while (stop_.load(std::memory_order_acquire) == false)
     {
       {
-        std::lock_guard<std::mutex> lock(mutex_);
-        std::swap(front_, back_);
+        std::unique_lock<std::mutex> guard(lock_);
+        cond_.wait(guard, [this]()
+        {
+          if (notified_ == false)
+            return false;
+
+          notified_ = false;
+          return true;
+        });
+
+        for (auto it = ptrs_.begin(); it != ptrs_.end();)
+        {
+          if ((*it).unique() == false) { ++it; continue; }
+
+          unique_ptrs.emplace_back(std::move(*it));
+          it = ptrs_.erase(it);
+        }
       }
 
-      if (front_.size()     > capacity &&
-          front_.capacity() > front_.size() * shrink_ratio_threshold)
-        front_.shrink_to_fit();
-
-      front_.erase(
-          std::remove_if(front_.begin(), front_.end(), [](const auto& sptr)
-          { return sptr.unique(); }),
-          front_.end() );
-
-      std::this_thread::sleep_for(std::chrono::microseconds(10000));
+      unique_ptrs.clear();
     }
-
-    std::lock_guard<std::mutex> lock(mutex_);
-    back_ .clear();
-    front_.clear();
   }
 
   void create_worker()
   {
     worker_ = std::thread([this]()
     {
-      thread_id_ = std::this_thread::get_id();
+      thread_id_.store(std::this_thread::get_id(), std::memory_order_release);
       worker_loop();
     });
   }
@@ -110,7 +118,7 @@ protected:
 
     worker_ = std::thread([this, ready = std::move(ready_promise)]() mutable
     {
-      thread_id_ = std::this_thread::get_id();
+      thread_id_.store(std::this_thread::get_id(), std::memory_order_release);
       ready.set_value();
       worker_loop();
     });
@@ -120,13 +128,16 @@ protected:
 
 protected:
   std::atomic<std::thread::id> thread_id_;
-  std::vector<std::shared_ptr<const void>> front_;
-  std::vector<std::shared_ptr<const void>> back_;
+  std::unordered_set<std::shared_ptr<const void>> ptrs_;
 
 protected:
-  std::mutex        mutex_;
-  std::atomic<bool> stop_;
-  std::thread       worker_;
+  std::mutex              lock_;
+  std::condition_variable cond_;
+  bool                    notified_ = false;
+
+protected:
+  std::atomic<bool>       stop_{false};
+  std::thread             worker_;
 };
 
 }
