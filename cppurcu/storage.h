@@ -46,7 +46,7 @@ public:
     source_ = value;
   }
 
-  guard<T> load() noexcept(false)
+  guard<T> load()
   {
     return local_.load();
   }
