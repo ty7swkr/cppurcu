@@ -9,9 +9,6 @@
 
 #include <cppurcu/local.h>
 
-/**
- * Versioned Thread-Local RCU Cache
- */
 namespace cppurcu
 {
 
@@ -19,6 +16,14 @@ template<typename T>
 class storage
 {
 public:
+  /**
+   * @param init_value Initial value. Nullptr is also allowed.
+   * @note  This storage permits nullptr as a stored state.
+   *        Callers must check for nullptr if nullptr carries semantic meaning in their context.
+   * @see   guard::operator*() const
+   * @param reclaimer An optional `reclaimer_thread` instance for background destruction.
+   *        If `nullptr`, the `T` object's destruction will occur on the reader thread.
+   */
   storage(const std::shared_ptr<const_t<T>> &init_value,
           std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
   : reclaimer_(reclaimer),
