@@ -5,7 +5,6 @@ TARGET  = rcu_bench
 INCLUDE += -I./
 
 ########################################
-# 공통 플래그
 LDFLAGS = -lrt -lpthread
 
 CPPFLAGS += -g -D_REENTRANT
