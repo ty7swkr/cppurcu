@@ -163,22 +163,27 @@ auto new_data = std::make_shared<std::unordered_map>();
 (*new_data)["key"] = "value";
 storage = new_data; // or storage.update(new_data);
 ```
+**⚠️ Important:**
+- The `storage<T>` instance must outlive all threads that use it
+- Destroying `storage` while threads are still accessing it results in undefined behavior
+- Typically, declare `storage` as a global, static, or long-lived member variable
+
 ### Snapshot Isolation
 Even when multiple `storage::load()` calls occur across complex call chains within a specific scope in the same thread, or when data updates occur from other threads, all read operations within that thread are enforced to see the same data version.
 
 When all guards are destroyed, next load() gets the updated version
 ```cpp
 {
-  auto data = storage.load();  // Snapshot version 1
+  auto data = storage.load();    // Snapshot version 1
   {
-    auto data1 = storage.load(); // Snapshot version 1
+    storage.update(new_data2);   // Update to version 2
+    auto data1 = storage.load(); // Still Snapshot version 1
   } // data1 Guard destroyed
 } // data Guard destroyed
 
-storage.update(new_data);      // Update to version 2
-
+storage.update(new_data3);       // Update to version 3
 {
-  auto data = storage.load();  // Loads version 2
+  auto data = storage.load();    // Loads version 3
 }
 ```
 
@@ -272,6 +277,11 @@ Creates a new storage with initial data.
 **Parameters:**
 - `init_value`: Initial data to store
 - `reclaimer` (optional): reclaimer_thread instance for background destruction. If nullptr, the T object is destroyed in the reader's thread.
+
+**Lifetime Requirements:**
+- The `storage<T>` instance must outlive all threads that call `load()` on it
+- It is the caller's responsibility to ensure proper lifetime management
+- Violation results in undefined behavior (dangling references)
 
 #### Methods
 
@@ -368,6 +378,12 @@ When enabled, reclaimer_thread handles object destruction in the background:
 2. Background thread periodically swaps and clears the queue
 3. Objects are destroyed without blocking readers
 4. Reduces overhead for objects with expensive destructors
+
+### Thread Safety Guarantees
+
+- Lock-free reads
+- Thread-safe updates
+- **Requirement**: `storage<T>` lifetime > thread lifetime
 <br>
 
 ## Tests
