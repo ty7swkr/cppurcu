@@ -23,7 +23,7 @@ namespace cppurcu
 class reclaimer_thread
 {
 public:
-  reclaimer_thread(bool wait_until_execution = false) : stop_(false)
+  reclaimer_thread(bool wait_until_execution = true) : stop_(false)
   {
     if (wait_until_execution == false)
       create_worker();
