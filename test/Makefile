@@ -12,7 +12,6 @@ CPPFLAGS += -g -D_REENTRANT
 CPPFLAGS += -O2 -std=c++17 -Wall -Wextra -Wfloat-equal -m64
 
 all: SOURCES = test.cpp
-#all: SOURCES = main.cpp
 all: build
 
 build:
