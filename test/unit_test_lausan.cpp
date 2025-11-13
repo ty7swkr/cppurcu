@@ -408,7 +408,7 @@ struct Node {
   Node(int v) : value(v) {}
 };
 
-void test_circular_reference_prevention() {
+void test_thread_local_cleanup_on_thread_exit() {
   weak_ptr<Node> weak_node1, weak_node2;
 
   thread t([&]() {
@@ -444,10 +444,9 @@ int main() {
     test_guard_lifetime_and_snapshot();
     test_concurrent_storage_destruction();
     test_without_reclaimer_memory();
-    test_circular_reference_prevention();
-
+    test_thread_local_cleanup_on_thread_exit();
     cout << "\n========================================" << endl;
-    cout << "All additional tests passed!" << endl;
+    cout << "All tests passed!" << endl;
     cout << "========================================" << endl;
   } catch (const exception &e) {
     cout << "\n!!! TEST FAILED: " << e.what() << endl;

@@ -933,7 +933,7 @@ void test_reclaimer_multithread()
   TEST_END()
 }
 
-void test_relaimer_mixed_types()
+void test_reclaimer_mixed_types()
 {
   TEST_START("MixedTypesReclamerTest")
 
@@ -1045,7 +1045,7 @@ int main()
   cout << "when worker threads exit and their thread-local storage is cleaned up." << endl;
   test_reclaimer();
   test_reclaimer_multithread();
-  test_relaimer_mixed_types();
+  test_reclaimer_mixed_types();
 
   cout << "\n========================================" << endl;
   cout << "All tests passed!" << endl;
