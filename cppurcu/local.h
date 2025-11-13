@@ -30,7 +30,7 @@ public:
       tls_value.init    = true;
       tls_value.version = new_version;
       tls_value.ptr     = new_source.get();
-      tls_value.value   = new_source;
+      tls_value.value   = std::move(new_source);
     }
 
     return guard<T>(tls_value, source_, reclaimer_);
