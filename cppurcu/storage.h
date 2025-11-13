@@ -57,4 +57,18 @@ private:
   local <T> local_;
 };
 
+template<typename T> storage<T>
+create(const std::shared_ptr<const_t<T>> &init_value,
+       std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
+{
+  return storage<T>(init_value, reclaimer);
+}
+
+template<typename T> storage<T>
+create(const std::shared_ptr<T> &init_value,
+       std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
+{
+  return storage<T>(std::static_pointer_cast<const_t<T>>(init_value), reclaimer);
+}
+
 }

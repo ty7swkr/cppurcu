@@ -32,7 +32,7 @@ void test_construct_and_load()
   TEST_START("ConstructAndLoad")
 
   auto initial = make_shared<int>(42);
-  storage<int> store(initial);
+  auto store   = cppurcu::create(initial);
 
   auto data = store.load();
   assert(*data == 42);
@@ -45,7 +45,7 @@ void test_update_and_load()
   TEST_START("UpdateAndLoad")
 
   auto initial = make_shared<int>(42);
-  storage<int> store(initial);
+  auto store   = cppurcu::create(initial);
 
   auto new_value = make_shared<int>(73);
   store.update(new_value);
@@ -61,7 +61,7 @@ void test_operator_assign()
   TEST_START("OperatorAssign")
 
   auto initial = make_shared<int>(42);
-  storage<int> store(initial);
+  auto store   = cppurcu::create(initial);
 
   auto new_value = make_shared<int>(99);
   store = new_value;
@@ -77,7 +77,7 @@ void test_multiple_updates()
   TEST_START("MultipleUpdates")
 
   auto initial = make_shared<int>(0);
-  storage<int> store(initial);
+  auto store   = cppurcu::create(initial);
 
   for (int i = 1; i <= 10; ++i)
   {
@@ -101,7 +101,7 @@ void test_guard()
   auto initial = make_shared<MapType>();
   (*initial)["key1"] = 100;
 
-  storage<MapType> store(initial);
+  auto store = cppurcu::create(initial);
 
   auto data = store.load();
   assert(data->count("key1") > 0);
@@ -127,7 +127,7 @@ void test_nested_guard()
   auto initial = make_shared<MapType>();
   (*initial)["key1"] = 100;
 
-  storage<MapType> store(initial);
+  auto store = cppurcu::create(initial);
 
   auto data = store.load();
   assert(data->count("key1") > 0);
@@ -154,7 +154,7 @@ void test_nested_guard_update()
   auto initial = make_shared<MapType>();
   (*initial)["key1"] = 100;
 
-  storage<MapType> store(initial);
+  auto store = cppurcu::create(initial);
 
   {
     auto data  = store.load();
@@ -181,7 +181,7 @@ void test_concurrent_reads()
   TEST_START("ConcurrentReads")
 
   auto initial = make_shared<int>(42);
-  storage<int> store(initial);
+  auto store = cppurcu::create(initial);
 
   atomic<bool> stop{false};
   atomic<size_t> read_count{0};
@@ -218,7 +218,7 @@ void test_concurrent_read_write()
   TEST_START("ConcurrentReadWrite")
 
   auto initial = make_shared<int>(0);
-  storage<int> store(initial);
+  auto store   = cppurcu::create(initial);
 
   atomic<bool> stop{false};
   atomic<size_t> read_count{0};
@@ -555,7 +555,7 @@ void test_multiple_storage_instances()
   vector<thread> threads;
   for (int tid = 0; tid < 5; ++tid)
   {
-    threads.emplace_back([&, tid]()
+    threads.emplace_back([&]()
     {
       while (!stop.load())
       {
@@ -637,7 +637,7 @@ void test_memory_cleanup()
     auto data1 = make_shared<int>(100);
     weak1 = data1;
 
-    storage<int> store(data1);
+    auto store = cppurcu::create(data1);
 
     // Reference count of data1: data1(1) + store.source_.value_(1) = 2
     assert(weak1.use_count() == 2);
@@ -795,16 +795,18 @@ void test_reclaimer()
 {
   TEST_START("ReclamerThreadTest")
 
+  std::thread::id main_id = this_thread::get_id();
+  cout << "Main thread ID: " << main_id << "\n";
+
+  // Create reclaimer_thread
+  auto rt = make_shared<reclaimer_thread>(true);
+  std::thread::id reclaimer_id = rt->thread_id();
+  cout << "reclaimer_thread ID: " << reclaimer_id << endl << endl;
+
+  thread test_thread([&]()
   {
-    cout << "Main thread ID: " << this_thread::get_id() << "\n";
-
-    // Create reclaimer_thread
-    auto rt = make_shared<reclaimer_thread>(true);
-    cout << "reclaimer_thread ID: " << rt->thread_id() << endl << endl;
-    std::thread::id reclaimer_id = rt->thread_id();
-
     // Initial object is created. Its destruction is expected on the reclaimer thread because 'store' is destroyed after 'rt' reference is created.
-    storage<TestObject> store(make_shared<TestObject>(100, reclaimer_id), rt);
+    auto store = cppurcu::create(make_shared<TestObject>(100, reclaimer_id), rt);
 
     cout << "Initial value: " << store.load()->value << "\n\n";
 
@@ -814,7 +816,7 @@ void test_reclaimer()
     for (int i = 1; i <= 5; ++i)
     {
       final_value = 100 + i;
-      // Set the expected ID for the new object to the reclaimer thread ID
+
       auto new_val = make_shared<TestObject>(final_value, reclaimer_id);
       store.update(new_val);
       cout << "Updated to: " << store.load()->value << "\n";
@@ -829,7 +831,9 @@ void test_reclaimer()
     // Object destruction thread ID verification is done inside the TestObject destructor.
 
     cout << "\nFinal value: " << store.load()->value << "\n";
-  }
+  });
+
+  test_thread.join();
 
   cout << "----------------------------------------" << endl;
   TEST_END()
@@ -838,17 +842,20 @@ void test_reclaimer()
 void test_reclaimer_multithread()
 {
   TEST_START("ReclamerMultiThreadTest")
-  {
-    cout << "Main thread ID: " << this_thread::get_id() << "\n";
 
-    // Create reclaimer_thread
-    auto rt = make_shared<reclaimer_thread>(true);
-    cout << "reclaimer_thread ID: " << rt->thread_id() << "\n\n";
-    std::thread::id reclaimer_id = rt->thread_id();
+  std::thread::id main_id = this_thread::get_id();
+  cout << "Main thread ID: " << main_id << "\n";
+
+  // Create reclaimer_thread
+  auto rt = make_shared<reclaimer_thread>(true);
+  std::thread::id reclaimer_id = rt->thread_id();
+  cout << "reclaimer_thread ID: " << reclaimer_id << endl << endl;
+
+  thread test_thread([&]()
+  {
+    auto store = cppurcu::create(make_shared<TestObject>(0, reclaimer_id), rt);
 
     // Initial object expects destruction on reclaimer thread
-    storage<TestObject> store(make_shared<TestObject>(0, reclaimer_id), rt);
-
     atomic<bool> stop{false};
     atomic<int> read_count{0};
     atomic<int> write_count{0};
@@ -918,28 +925,29 @@ void test_reclaimer_multithread()
 
     cout << "Waiting for reclaimer cleanup...\n";
     this_thread::sleep_for(chrono::milliseconds(500));
-  }
+  });
+
+  test_thread.join();
   cout << "Cleanup done! ----------------------------------------\n";
 
   TEST_END()
 }
 
-void test_mixed_types()
+void test_relaimer_mixed_types()
 {
   TEST_START("MixedTypesReclamerTest")
 
+  auto rt = make_shared<reclaimer_thread>(true);
+  std::thread::id reclaimer_id = rt->thread_id();
+
+  thread test_thread([&]()
   {
-    cout << "Main thread ID: " << this_thread::get_id() << "\n";
-
-    // Share a single reclaimer_thread
-    auto rt = make_shared<reclaimer_thread>(true);
+    cout << "Test thread ID: " << this_thread::get_id() << "\n";
     cout << "reclaimer_thread ID: " << rt->thread_id() << "\n\n";
-    std::thread::id reclaimer_id = rt->thread_id();
 
-    // Initial objects expect destruction on reclaimer thread
-    storage<TypeA> storeA(make_shared<TypeA>(100, reclaimer_id), rt);
-    storage<TypeB> storeB(make_shared<TypeB>("initial", reclaimer_id), rt);
-    storage<TypeC> storeC(make_shared<TypeC>(3.14, reclaimer_id), rt);
+    auto storeA = cppurcu::create(make_shared<TypeA>(100, reclaimer_id), rt);
+    auto storeB = cppurcu::create(make_shared<TypeB>("initial", reclaimer_id), rt);
+    auto storeC = cppurcu::create(make_shared<TypeC>(3.14, reclaimer_id), rt);
 
     // Initialize thread_local cache via initial load
     storeA.load();
@@ -954,7 +962,6 @@ void test_mixed_types()
     for (int i = 1; i <= 3; ++i)
     {
       final_A_value = 100 + i;
-      // Set the expected ID for the new object to the reclaimer thread ID
       storeA.update(make_shared<TypeA>(final_A_value, reclaimer_id));
       storeA.load();
       this_thread::sleep_for(chrono::milliseconds(150));
@@ -966,7 +973,6 @@ void test_mixed_types()
     for (int i = 1; i <= 3; ++i)
     {
       final_B_name = "update" + to_string(i);
-      // Set the expected ID for the new object to the reclaimer thread ID
       storeB.update(make_shared<TypeB>(final_B_name, reclaimer_id));
       storeB.load();
       this_thread::sleep_for(chrono::milliseconds(150));
@@ -978,7 +984,6 @@ void test_mixed_types()
     for (int i = 1; i <= 3; ++i)
     {
       final_C_data = 3.14 + i;
-      // Set the expected ID for the new object to the reclaimer thread ID
       storeC.update(make_shared<TypeC>(final_C_data, reclaimer_id));
       storeC.load();
       this_thread::sleep_for(chrono::milliseconds(150));
@@ -992,12 +997,12 @@ void test_mixed_types()
     cout << "TypeB: " << storeB.load()->name << "\n";
     cout << "TypeC: " << storeC.load()->data << "\n";
 
-    // Final value verification
     assert(storeA.load()->value == final_A_value);
     assert(storeB.load()->name == final_B_name);
     assert(abs(storeC.load()->data - final_C_data) < 0.0001);
-    // Object destruction thread ID verification is done inside each object's destructor.
-  }
+  });
+
+  test_thread.join();  // Thread-local cleaned up on thread exit
 
   cout << "Test completed! ----------------------------------------\n";
   TEST_END()
@@ -1006,13 +1011,8 @@ void test_mixed_types()
 // ============================================================================
 // Main
 // ============================================================================
-
 int main()
 {
-  cout << "========================================" << endl;
-  cout << "cppurcu::storage Unit Tests" << endl;
-  cout << "========================================" << endl;
-
   // Note: immediately flag is not used in the provided tests,
   // but keeping it here for completeness
 
@@ -1041,9 +1041,11 @@ int main()
   test_memory_cleanup();
 
   cout << "\n--- reclaimer_thread Tests ---" << endl;
+  cout << "Note: These tests verify that the reclaimer properly handles old objects" << endl;
+  cout << "when worker threads exit and their thread-local storage is cleaned up." << endl;
   test_reclaimer();
   test_reclaimer_multithread();
-  test_mixed_types();
+  test_relaimer_mixed_types();
 
   cout << "\n========================================" << endl;
   cout << "All tests passed!" << endl;
