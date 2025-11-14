@@ -6,11 +6,10 @@ CC_DEFAULT = clang++
 #CC_DEFAULT = g++
 
 INCLUDE += -I../
+CPPFLAGS += -D_REENTRANT -g -m64
 LDFLAGS = -lrt -lpthread
-CPPFLAGS += -D_REENTRANT 
-CPPFLAGS += -g -m64
 
-.PHONY: all build clean
+.PHONY: all build clean test tsan lsan
 
 # ====================================================================
 # 2. Target definitions
@@ -28,6 +27,12 @@ all: build
 
 build: $(TARGET_TEST) $(TARGET_TSAN) $(TARGET_LAUSAN)
 
+test: $(TARGET_TEST)
+
+tsan: $(TARGET_TSAN)
+
+lsan: $(TARGET_LAUSAN)
+
 # ====================================================================
 # 4. Individual target rules
 # ====================================================================
@@ -36,41 +41,50 @@ build: $(TARGET_TEST) $(TARGET_TSAN) $(TARGET_LAUSAN)
 # 4.1. unit_test
 # ----------------------------------
 SOURCES_TEST = unit_test.cpp
+OBJECTS_TEST = $(SOURCES_TEST:.cpp=.o)
 CPPFLAGS_TEST = $(CPPFLAGS) -O2 -std=c++17 -Wall -Wextra -Wfloat-equal
 
-$(TARGET_TEST): $(SOURCES_TEST)
-	@echo "--- Building $(TARGET_TEST) ---"
-	$(eval OBJECTS_TEST := $(SOURCES_TEST:.cpp=.o))
-	$(CC_DEFAULT) $(INCLUDE) $(CPPFLAGS_TEST) -c $(SOURCES_TEST) -o $(OBJECTS_TEST)
+$(TARGET_TEST): $(OBJECTS_TEST)
+	@echo "--- Linking $(TARGET_TEST) ---"
 	$(CC_DEFAULT) -o $(TARGET_TEST) $(OBJECTS_TEST) $(CPPFLAGS_TEST) $(LDFLAGS)
+
+unit_test.o: unit_test.cpp
+	@echo "--- Compiling unit_test.cpp ---"
+	$(CC_DEFAULT) $(INCLUDE) $(CPPFLAGS_TEST) -MMD -MP -c $< -o $@
 
 # ----------------------------------
 # 4.2. unit_test_tsan
 # ----------------------------------
 SOURCES_TSAN = unit_test_tsan.cpp
+OBJECTS_TSAN = $(SOURCES_TSAN:.cpp=.o)
 CPPFLAGS_TSAN = $(CPPFLAGS) -fno-omit-frame-pointer
 CPPFLAGS_TSAN += -fsanitize=thread
 CPPFLAGS_TSAN += -O1 -std=c++17 -Wall -Wextra -Wfloat-equal
 
-$(TARGET_TSAN): $(SOURCES_TSAN)
-	@echo "--- Building $(TARGET_TSAN) ---"
-	$(eval OBJECTS_TSAN := $(SOURCES_TSAN:.cpp=.o))
-	$(CC_DEFAULT) $(INCLUDE) $(CPPFLAGS_TSAN) -c $(SOURCES_TSAN) -o $(OBJECTS_TSAN)
+$(TARGET_TSAN): $(OBJECTS_TSAN)
+	@echo "--- Linking $(TARGET_TSAN) ---"
 	$(CC_DEFAULT) -o $(TARGET_TSAN) $(OBJECTS_TSAN) $(CPPFLAGS_TSAN) $(LDFLAGS)
+
+unit_test_tsan.o: unit_test_tsan.cpp
+	@echo "--- Compiling unit_test_tsan.cpp ---"
+	$(CC_DEFAULT) $(INCLUDE) $(CPPFLAGS_TSAN) -MMD -MP -c $< -o $@
 
 # ----------------------------------
 # 4.3. unit_test_lausan
 # ----------------------------------
 SOURCES_LAUSAN = unit_test_lausan.cpp
+OBJECTS_LAUSAN = $(SOURCES_LAUSAN:.cpp=.o)
 CPPFLAGS_LAUSAN = $(CPPFLAGS) -fno-omit-frame-pointer
 CPPFLAGS_LAUSAN += -fsanitize=leak -fsanitize=address -fsanitize=undefined
 CPPFLAGS_LAUSAN += -O2 -std=c++17 -Wall -Wextra -Wfloat-equal
 
-$(TARGET_LAUSAN): $(SOURCES_LAUSAN)
-	@echo "--- Building $(TARGET_LAUSAN) ---"
-	$(eval OBJECTS_LAUSAN := $(SOURCES_LAUSAN:.cpp=.o))
-	$(CC_DEFAULT) $(INCLUDE) $(CPPFLAGS_LAUSAN) -c $(SOURCES_LAUSAN) -o $(OBJECTS_LAUSAN)
+$(TARGET_LAUSAN): $(OBJECTS_LAUSAN)
+	@echo "--- Linking $(TARGET_LAUSAN) ---"
 	$(CC_DEFAULT) -o $(TARGET_LAUSAN) $(OBJECTS_LAUSAN) $(CPPFLAGS_LAUSAN) $(LDFLAGS)
+
+unit_test_lausan.o: unit_test_lausan.cpp
+	@echo "--- Compiling unit_test_lausan.cpp ---"
+	$(CC_DEFAULT) $(INCLUDE) $(CPPFLAGS_LAUSAN) -MMD -MP -c $< -o $@
 
 # ====================================================================
 # 5. Clean target
@@ -78,4 +92,12 @@ $(TARGET_LAUSAN): $(SOURCES_LAUSAN)
 
 clean:
 	@echo "--- Cleaning up build files ---"
-	rm -rf $(TARGET_TEST) $(TARGET_TSAN) $(TARGET_LAUSAN) *.o core.*
+	rm -rf $(TARGET_TEST) $(TARGET_TSAN) $(TARGET_LAUSAN) *.o *.d core.*
+
+# ====================================================================
+# 6. Include dependencies
+# ====================================================================
+
+-include $(SOURCES_TEST:.cpp=.d)
+-include $(SOURCES_TSAN:.cpp=.d)
+-include $(SOURCES_LAUSAN:.cpp=.d)

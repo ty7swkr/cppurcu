@@ -1,32 +1,42 @@
-CC	= g++
+CC      = g++
+#CC     = clang++-10
 
-TARGET  = rcu_bench
+TARGET		= rcu_bench
+SOURCES	= rcu_bench1.cpp
 
-INCLUDE += -I./
+ifeq ($(MAKECMDGOALS),liburcu)
+	SOURCES = rcu_bench2.cpp
+endif
 
-########################################
-LDFLAGS = -lrt -lpthread
+INCLUDE =  -I./
 
 CPPFLAGS += -g -D_REENTRANT
-CPPFLAGS += -O2 -std=c++17 -Wall -Wextra -Wfloat-equal -m64
+CPPFLAGS  +=  -O2 -std=c++17 -Wall -Wextra -Wfloat-equal -m64
 
-# bench1 (without liburcu)
-all: SOURCES = rcu_bench1.cpp
-all: build
+OBJECTS :=  $(SOURCES:.cpp=.o)
+DEPENDS :=  $(SOURCES:.cpp=.d)
 
-# bench2 (with liburcu)
-liburcu: SOURCES = rcu_bench2.cpp
-#liburcu: LDFLAGS += -lurcu-memb
-liburcu: LDFLAGS += -lurcu-mb -lurcu
-liburcu: build
+ifeq ($(MAKECMDGOALS),liburcu)
+	LDFLAGS += -lurcu-mb -lurcu
+endif
+LDFLAGS += -lrt -lpthread
 
-build:
-	$(eval OBJECTS := $(SOURCES:.cpp=.o))
-	$(CC) $(INCLUDE) $(CPPFLAGS) -c $(SOURCES) -o $(OBJECTS)
+all: $(DEPENDS) $(OBJECTS)
 	rm -rf core.*
 	$(CC) -o $(TARGET) $(OBJECTS) $(CPPFLAGS) $(LDFLAGS)
 
 clean:
-	rm -rf $(TARGET) *.o
+	rm -rf $(TARGET) $(OBJECTS)
 
-.PHONY: all liburcu build clean
+.c.o: $(.cpp.o)
+.cpp.o:
+	$(CC) $(INCLUDE) $(CPPFLAGS) -c $< -o $@
+  
+%d:%cpp
+	$(CC) $(INCLUDE) $(CPPFLAGS) -MM -MP -MT "$(@:.d=.o) $@" -MF $@ $<
+
+.PHONY: all
+
+liburcu: all
+
+-include $(DEPENDS)
