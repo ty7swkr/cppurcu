@@ -43,11 +43,13 @@ public:
   ~guard() { --tls_value_.ref_count; }
 
   // Pointer-like access
+  // const T * objects returned as operator->() are very dangerous if stored separately
+  // they should only be used within their scope.
   const_t<T> *operator->() const noexcept { return tls_value_.ptr;    }
   const_t<T> &operator* () const noexcept { return *(tls_value_.ptr); }
   explicit operator bool() const noexcept { return tls_value_.ptr != nullptr; }
 
-  uint64_t ref_count() const { return tls_value_.ref_count; }
+  uint64_t ref_count() const noexcept { return tls_value_.ref_count; }
 
 protected:
   friend class local<T>;

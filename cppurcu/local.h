@@ -21,6 +21,9 @@ public:
   : source_(source), reclaimer_(reclaimer) {}
   ~local() {}
 
+  // Return and use the guard object as if it were a load() function.
+  // Using it directly without return (ex. storage::load()->value)
+  // can be dangerous because it does not isolate snapshots.
   guard<T> load()
   {
     auto &tls_value = tls_value_.ref();
@@ -37,10 +40,9 @@ public:
   }
 
 protected:
-  // CONST_T * Fast Path
   tls_instance<tls_value_t<T>> tls_value_;
 
-  const source<T>   &source_;
+  const source<T>  &source_;
   reclaimer_thread *reclaimer_ = nullptr;
 };
 

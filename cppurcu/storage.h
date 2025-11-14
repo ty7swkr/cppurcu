@@ -13,16 +13,50 @@ namespace cppurcu
 {
 
 template<typename T>
+class storage;
+
+/**
+ * @brief Creates a new storage object from a const-qualified T.
+ *
+ * Constructs and initializes a storage<T> object
+ * using a std::shared_ptr<const T>.
+ *
+ * @param init_value Initial value to be stored in storage. May be nullptr.
+ * @param reclaimer  Optional reclaimer_thread instance for background destruction.
+ *                   If nullptr, the T object is destroyed on the reading thread.
+ * @return A storage<T> object.
+ */
+template<typename T>
+storage<T> create(const std::shared_ptr<const T> &init_value,
+                  std::shared_ptr<reclaimer_thread> reclaimer = nullptr);
+
+/**
+ * @brief Creates a new storage object from a non-const T.
+ *
+ * This overload takes a std::shared_ptr<T> and internally converts it
+ * to the const-qualified type required by storage.
+ *
+ * @param init_value Initial value to be stored in storage. May be nullptr.
+ * @param reclaimer  Optional reclaimer_thread instance for background destruction.
+ *                   If nullptr, the T object is destroyed on the reading thread.
+ * @return The initialized storage<T> object.
+ */
+template<typename T>
+storage<T> create(const std::shared_ptr<T> &init_value,
+                  std::shared_ptr<reclaimer_thread> reclaimer = nullptr);
+
+template<typename T>
 class storage
 {
 public:
   /**
-   * @param init_value Initial value. Nullptr is also allowed.
-   * @note  This storage permits nullptr as a stored state.
-   *        Callers must check for nullptr if nullptr carries semantic meaning in their context.
+   * @param init_value Initial value. May be nullptr.
+   * @param reclaimer  Optional reclaimer_thread instance for background destruction.
+   *                   If nullptr, the T object is destroyed on the reader thread.
+   *
+   * @note  This storage allows nullptr as a valid stored value.
+   *        Callers must check for nullptr when it has semantic meaning in their context.
    * @see   guard::operator*() const
-   * @param reclaimer An optional `reclaimer_thread` instance for background destruction.
-   *        If `nullptr`, the `T` object's destruction will occur on the reader thread.
    */
   storage(const std::shared_ptr<const_t<T>> &init_value,
           std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
@@ -46,6 +80,9 @@ public:
     source_ = value;
   }
 
+  // Return and use the guard object as if it were a load() function.
+  // Using it directly without return (ex. storage::load()->value)
+  // can be dangerous because it does not isolate snapshots.
   guard<T> load()
   {
     return local_.load();
@@ -58,15 +95,15 @@ private:
 };
 
 template<typename T> storage<T>
-create(const std::shared_ptr<const_t<T>> &init_value,
-       std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
+create(const std::shared_ptr<const T> &init_value,
+       std::shared_ptr<reclaimer_thread> reclaimer)
 {
   return storage<T>(init_value, reclaimer);
 }
 
 template<typename T> storage<T>
 create(const std::shared_ptr<T> &init_value,
-       std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
+       std::shared_ptr<reclaimer_thread> reclaimer)
 {
   return storage<T>(std::static_pointer_cast<const_t<T>>(init_value), reclaimer);
 }
