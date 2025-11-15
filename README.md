@@ -145,12 +145,10 @@ In this run, liburcu recorded approximately 175 updates, although this figure ma
 #include <cppurcu/cppurcu.h>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 // Create a storage with initial data
-cppurcu::storage<std::unordered_map<std::string, std::string>> storage(
-  std::make_shared<std::unordered_map<std::string, std::string>>()
-);
+auto storage = cppurcu::create(std::make_shared<std::map<std::string, std::string>>());
 
 // Read (lock-free) - returns a guard object
 auto data = storage.load(); // cppurcu::guard<T>
@@ -159,7 +157,7 @@ if (data->count("key") > 0) {
 }
 
 // Update (immediate, delegates reclamation to std::shared_ptr)
-auto new_data = std::make_shared<std::unordered_map>();
+auto new_data = std::make_shared<std::map>();
 (*new_data)["key"] = "value";
 storage = new_data; // or storage.update(new_data);
 ```
@@ -197,21 +195,16 @@ For objects with expensive destructors, you can use a reclaimer_thread to handle
 auto reclaimer = std::make_shared<cppurcu::reclaimer_thread>();
 
 // Create storage with reclaimer thread
-cppurcu::storage<std::set<std::string>> storage1(
-  std::make_shared<std::set<std::string>>(),
-  reclaimer
-);
+auto storage1 = cppurcu::create(std::make_shared<std::set<std::string>>(), reclaimer);
 
 // reclaimer_thread can be used regardless of template type.
-cppurcu::storage<std::vector<int>> storage2(
-  std::make_shared<std::vector<int>>(),
-  reclaimer
-);
+auto storage2 = cppurcu::create(std::make_shared<std::vector<int>>(), reclaimer);
 
 // Somewhere in the source...(update)
 storage1 = new_data;
 
-// calls load, it gets the updated object and the old object is destroyed in the background thread(reclaimer_thread)
+// calls load, it gets the updated object.
+// The old object is destroyed in the background thread(reclaimer_thread)
 auto data = storage1.load();
 
 ```
@@ -266,10 +259,7 @@ Main class for RCU-protected data storage.
 
 #### Constructor
 ```cpp
-storage(const std::shared_ptr<const T>& init_value,
-        std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
-
-storage(std::shared_ptr<const T>&& init_value,
+storage(std::shared_ptr<const T> init_value,
         std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
 ```
 Creates a new storage with initial data.
@@ -290,12 +280,12 @@ Creates a new storage with initial data.
 - Returns a guard object that provides access to the current data
 - On the first load() within the scope, if there is new data, replace it with the new data and release the shared_ptr of the previous data.
 
-**`void update(const std::shared_ptr<const T>& value)`**
+**`void update(std::shared_ptr<const T> value)`**
 - Publishes new data
 - Deadlocks do not occur even when used concurrently within the same scope as the load() function.
 - cppurcu does not reclaim old data itself; it delegates reclamation to std::shared_ptr.
 
-**`void operator=(const std::shared_ptr<const T>& value)`**
+**`void operator=(std::shared_ptr<const T> value)`**
 - Convenience operator for updates
 - Equivalent to `update(value)`
 
@@ -331,16 +321,26 @@ Background thread for handling object destruction.
 
 #### Constructor
 ```cpp
-reclaimer_thread(bool wait_until_execution = false)
+  reclaimer_thread(bool wait_until_execution = true,
+                   std::chrono::microseconds reclaim_interval =
+                   std::chrono::microseconds{10000})
+
+  reclaimer_thread(std::chrono::microseconds reclaim_interval,
+                   bool wait_until_execution = true)
 ```
-Creates a background reclaimer thread.
+*Periodically scans the reclaim queue and removes shared_ptrs when they become unique, triggering their destruction.*<br>
+*Objects that are still referenced elsewhere cannot be reclaimed and remain in the queue.*
 
 **Parameters:**
 - `wait_until_execution` (optional): If true, constructor waits until the reclaimer thread starts. If false, returns immediately.
+- `reclaim_interval` (optional, default: 10000μs = 10ms): Interval for periodic scanning of the reclaim queue.
+  - If > 0μs: Scans periodically at the specified interval, in addition to notifications.
+  - If 0μs: Notification-only mode. Scans only when push() is called. Not recommended - may delay reclamation if updates are infrequent.
+
 
 #### Methods
 
-**`template<typename T> void push(const std::shared_ptr<T>& ptr)`**
+**`template<typename T> void push(std::shared_ptr<T> &&ptr)`**
 - Queues an object for background destruction
 - Usually called internally by storage::load() when data is updated
 
@@ -356,7 +356,7 @@ cppurcu uses a multi-layer approach:
 2. **`guard<T>`**: Return value of storage<T>::load(), RAII guard for snapshot isolation
 3. **`source<T>`**: Maintains the authoritative data and version counter
 4. **`local<T>`**: Thread-local caching (shallow copy only)
-5. **`reclaimer_thread`** (optional): Background thread for `<T>` object destruction
+5. **`reclaimer_thread (optional)`**: Background thread for handling object destruction.
 
 This design does not use:
 - ABA problem solutions (no tagged pointers)
@@ -374,10 +374,10 @@ When creating a guard (each `load()` call):
 ### Reclaimer Thread (Optional)
 
 When enabled, reclaimer_thread handles object destruction in the background:
-1. storage::load() pushes old values to a double-buffered queue when version changes
-2. Background thread periodically swaps and clears the queue
-3. Objects are destroyed without blocking readers
-4. Reduces overhead for objects with expensive destructors
+1. storage::load() pushes old shared_ptrs to the reclaim queue when data is updated
+2. Worker thread scans periodically and removes entries when unique()
+3. Non-unique objects remain in the queue until they become reclaimable
+4. Objects are destroyed without blocking readers, reducing overhead for expensive destructors
 
 ### Thread Safety Guarantees
 

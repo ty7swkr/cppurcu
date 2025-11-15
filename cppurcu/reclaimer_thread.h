@@ -19,17 +19,25 @@
 
 namespace cppurcu
 {
-
+/**
+ * Best-effort reclamation for shared_ptr
+ *
+ * A worker thread scans ptrs_ on notification or when reclaim_interval_ expires.
+ * If reclaim_interval_ == 0μs, it scans only on notification.
+ * Entries are removed only when shared_ptr::unique() == true.
+ * Attempts to destroy all tracked objects before the thread exits,
+ * but cannot guarantee completion if shared_ptrs are still referenced elsewhere.
+ */
 class reclaimer_thread
 {
 public:
-  reclaimer_thread(bool wait_until_execution = true) : stop_(false)
-  {
-    if (wait_until_execution == false)
-      create_worker();
-    else
-      create_worker_and_wait();
-  }
+  reclaimer_thread(bool wait_until_execution = true,
+                   std::chrono::microseconds reclaim_interval = std::chrono::microseconds{10000})
+  : reclaim_interval_(reclaim_interval), stop_(false) { init(wait_until_execution); }
+
+  reclaimer_thread(std::chrono::microseconds reclaim_interval,
+                   bool wait_until_execution = true)
+  : reclaim_interval_(reclaim_interval), stop_(false) { init(wait_until_execution); }
 
   reclaimer_thread(const reclaimer_thread &) = delete;
   reclaimer_thread(reclaimer_thread &&) = delete;
@@ -63,7 +71,6 @@ public:
       return;
 
     notified_ = true;
-
     cond_.notify_one();
   }
 
@@ -82,14 +89,21 @@ protected:
     {
       {
         std::unique_lock<std::mutex> guard(lock_);
-        cond_.wait(guard, [this]()
+
+        // Prevent spurious wakeups and signal loss
+        auto pred = [this]()
         {
           if (notified_ == false)
             return false;
 
           notified_ = false;
           return true;
-        });
+        };
+
+        if (reclaim_interval_.count() == 0)
+          cond_.wait    (guard, pred);
+        else
+          cond_.wait_for(guard, reclaim_interval_, pred);
 
         for (auto it = ptrs_.begin(); it != ptrs_.end();)
         {
@@ -128,6 +142,14 @@ protected:
     ready_future.wait();
   }
 
+  void init(bool wait_until_execution)
+  {
+    if (wait_until_execution == false)
+      create_worker();
+    else
+      create_worker_and_wait();
+  }
+
 protected:
   std::atomic<std::thread::id> thread_id_;
   std::unordered_set<std::shared_ptr<const void>> ptrs_;
@@ -138,8 +160,9 @@ protected:
   bool                    notified_ = false;
 
 protected:
-  std::atomic<bool>       stop_{false};
-  std::thread             worker_;
+  std::chrono::microseconds reclaim_interval_{10000};
+  std::atomic<bool>         stop_{false};
+  std::thread               worker_;
 };
 
 }
