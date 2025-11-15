@@ -22,45 +22,41 @@ template<typename T>
 class source
 {
 public:
-  source(const std::shared_ptr<const_t<T>> &init_value,
-               reclaimer_thread            *reclaimer = nullptr)
-  : value_(init_value), reclaimer_(reclaimer) {}
-
-  source(      std::shared_ptr<const_t<T>> &&init_value,
-               reclaimer_thread            *reclaimer = nullptr)
+  source(std::shared_ptr<const_t<T>> init_value,
+         reclaimer_thread            *reclaimer = nullptr)
   : value_(std::move(init_value)), reclaimer_(reclaimer) {}
 
   ~source()
   {
     if (auto value = value_.load(); reclaimer_ != nullptr && value != nullptr)
     {
-      reclaimer_->push(value);
+      reclaimer_->push(std::move(value));
       value_.reset();
     }
   }
 
-  void operator=(const std::shared_ptr<const_t<T>> &value)
+  void operator=(std::shared_ptr<const_t<T>> value)
   {
-    this->update(value);
+    this->update(std::move(value));
   }
 
-  void update(const std::shared_ptr<const_t<T>> &value)
+  void update(std::shared_ptr<const_t<T>> value)
   {
     std::shared_ptr<const_t<T>> old = nullptr;
     {
       std::lock_guard<spinlock> guard(update_lock_);
       old = value_.load(std::memory_order_acquire);
 
-      value_  .store    (value, std::memory_order_release);
-      version_.fetch_add(1,     std::memory_order_release);
+      value_  .store    (std::move(value), std::memory_order_release);
+      version_.fetch_add(1,                std::memory_order_release);
     }
 
-    if (reclaimer_ != nullptr)
-      reclaimer_->push(old);
+    if (reclaimer_ != nullptr && old != nullptr)
+      reclaimer_->push(std::move(old));
   }
 
   std::tuple<uint64_t, std::shared_ptr<const_t<T>>>
-  load(uint64_t value_version) const
+  load(uint64_t value_version) const noexcept
   {
     auto version = version_.load(std::memory_order_acquire);
     if (value_version == version)

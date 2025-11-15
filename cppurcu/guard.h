@@ -40,7 +40,7 @@ public:
   guard(guard &&other) = delete;
   guard &operator=(const guard &) = delete;
 
-  ~guard() { --tls_value_.ref_count; }
+  ~guard() noexcept { --tls_value_.ref_count; }
 
   // Pointer-like access
   // const T * objects returned as operator->() are very dangerous if stored separately
@@ -66,7 +66,7 @@ protected:
       // Raw pointer update only when version changes, Fast Path
       tls_value_.version = new_version;
       tls_value_.ptr     = new_source.get();
-      if (reclaimer_ != nullptr) reclaimer_->push(tls_value_.value);
+      if (reclaimer_ != nullptr) reclaimer_->push(std::move(tls_value_.value));
       tls_value_.value   = std::move(new_source);
     }
   }

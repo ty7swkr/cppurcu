@@ -51,7 +51,7 @@ public:
     return std::atomic_load_explicit(&ptr_, m_order);
   }
 
-  void reset(std::memory_order m_order = std::memory_order_release)
+  void reset(std::memory_order m_order = std::memory_order_release) noexcept
   {
     this->store(nullptr, m_order);
   }

@@ -27,7 +27,7 @@ class storage;
  * @return A storage<T> object.
  */
 template<typename T>
-storage<T> create(const std::shared_ptr<const T> &init_value,
+storage<T> create(std::shared_ptr<const T> init_value,
                   std::shared_ptr<reclaimer_thread> reclaimer = nullptr);
 
 /**
@@ -42,7 +42,7 @@ storage<T> create(const std::shared_ptr<const T> &init_value,
  * @return The initialized storage<T> object.
  */
 template<typename T>
-storage<T> create(const std::shared_ptr<T> &init_value,
+storage<T> create(std::shared_ptr<T> init_value,
                   std::shared_ptr<reclaimer_thread> reclaimer = nullptr);
 
 template<typename T>
@@ -58,26 +58,20 @@ public:
    *        Callers must check for nullptr when it has semantic meaning in their context.
    * @see   guard::operator*() const
    */
-  storage(const std::shared_ptr<const_t<T>> &init_value,
-          std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
-  : reclaimer_(reclaimer),
-    source_   (init_value, reclaimer.get()),
-    local_    (source_,    reclaimer.get()) {}
-
-  storage(std::shared_ptr<const_t<T>>       &&init_value,
+  storage(std::shared_ptr<const_t<T>> init_value,
           std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
   : reclaimer_(reclaimer),
     source_   (std::move(init_value), reclaimer.get()),
     local_    (source_,               reclaimer.get()) {}
 
-  void update(const std::shared_ptr<const_t<T>> &value)
+  void update(std::shared_ptr<const_t<T>> value)
   {
-    source_.update(value);
+    source_.update(std::move(value));
   }
 
-  void operator=(const std::shared_ptr<const_t<T>> &value)
+  void operator=(std::shared_ptr<const_t<T>> value)
   {
-    source_ = value;
+    source_ = std::move(value);
   }
 
   // Return and use the guard object as if it were a load() function.
@@ -95,17 +89,17 @@ private:
 };
 
 template<typename T> storage<T>
-create(const std::shared_ptr<const T> &init_value,
+create(std::shared_ptr<const T> init_value,
        std::shared_ptr<reclaimer_thread> reclaimer)
 {
-  return storage<T>(init_value, reclaimer);
+  return storage<T>(std::move(init_value), reclaimer);
 }
 
 template<typename T> storage<T>
-create(const std::shared_ptr<T> &init_value,
+create(std::shared_ptr<T> init_value,
        std::shared_ptr<reclaimer_thread> reclaimer)
 {
-  return storage<T>(std::static_pointer_cast<const_t<T>>(init_value), reclaimer);
+  return storage<T>(std::move(init_value), reclaimer);
 }
 
 }
