@@ -284,7 +284,7 @@ int main() {
     test_nested_guards_extreme();
     test_random_workload();
     cout << "\n========================================\n";
-    cout << "ALL STRESS TESTS PASSED!\n";
+    cout << "All tests passed!\n";
     cout << "========================================\n";
   } catch (const exception &e) {
     cout << "\n!!! TEST FAILED: " << e.what() << "\n";

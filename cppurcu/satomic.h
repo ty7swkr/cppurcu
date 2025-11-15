@@ -42,7 +42,7 @@ public:
 
   satomic &operator=(std::shared_ptr<T> ptr) noexcept
   {
-    this->store(ptr);
+    this->store(std::move(ptr));
     return *this;
   }
 
