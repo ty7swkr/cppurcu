@@ -60,7 +60,7 @@ protected:
     if (tls_value_.ref_count++ > 0)
       return;
 
-    // tls_value_.ref_count == 0
+    // in case tls_value_.ref_count == 0
     if (auto [new_version, new_source] = source_.load(tls_value_.version); new_version != tls_value_.version)
     {
       // Raw pointer update only when version changes, Fast Path

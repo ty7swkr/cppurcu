@@ -32,9 +32,9 @@ public:
 
   ~source()
   {
-    if (reclaimer_ != nullptr && value_.load() != nullptr)
+    if (auto value = value_.load(); reclaimer_ != nullptr && value != nullptr)
     {
-      reclaimer_->push(value_.load());
+      reclaimer_->push(value);
       value_.reset();
     }
   }

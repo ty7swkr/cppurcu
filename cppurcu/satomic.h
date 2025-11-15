@@ -51,9 +51,9 @@ public:
     return std::atomic_load_explicit(&ptr_, m_order);
   }
 
-  void reset()
+  void reset(std::memory_order m_order = std::memory_order_release)
   {
-    ptr_.reset();
+    this->store(nullptr, m_order);
   }
 
 private:
