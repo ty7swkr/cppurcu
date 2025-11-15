@@ -50,16 +50,18 @@ public:
   }
 
   template<typename T>
-  void push(std::shared_ptr<T> ptr)
+  void push(std::shared_ptr<T> &&ptr)
   {
     if (!ptr)
       return;
 
     std::lock_guard<std::mutex> guard(lock_);
-    ptrs_.insert(std::move(ptr));
+    if (ptrs_.insert(std::move(ptr)).second == false)
+      return;
 
     if (notified_ == true)
       return;
+
     notified_ = true;
 
     cond_.notify_one();
