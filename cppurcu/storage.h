@@ -62,7 +62,7 @@ public:
           std::shared_ptr<reclaimer_thread> reclaimer = nullptr)
   : reclaimer_(reclaimer),
     source_   (std::move(init_value), reclaimer.get()),
-    local_    (source_,               reclaimer.get()) {}
+    local_    (source_) {}
 
   void update(std::shared_ptr<const_t<T>> value)
   {

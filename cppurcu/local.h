@@ -17,8 +17,8 @@ template<typename T>
 class local
 {
 public:
-  local(const source<T> &source, reclaimer_thread *reclaimer = nullptr)
-  : source_(source), reclaimer_(reclaimer) {}
+  local(const source<T> &source)
+  : source_(source) {}
   ~local() {}
 
   // Return and use the guard object as if it were a load() function.
@@ -36,14 +36,12 @@ public:
       tls_value.value   = std::move(new_source);
     }
 
-    return guard<T>(tls_value, source_, reclaimer_);
+    return guard<T>(tls_value, source_);
   }
 
 protected:
   tls_instance<tls_value_t<T>> tls_value_;
-
-  const source<T>  &source_;
-  reclaimer_thread *reclaimer_ = nullptr;
+  const source<T> &source_;
 };
 
 }

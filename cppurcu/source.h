@@ -73,8 +73,7 @@ public:
   }
 
 protected:
-  mutable spinlock     update_lock_;
-
+  mutable spinlock      update_lock_;
   satomic<const_t<T>>   value_;
   std::atomic<uint64_t> version_{0};
   reclaimer_thread      *reclaimer_ = nullptr;

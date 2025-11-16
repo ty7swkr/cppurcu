@@ -26,7 +26,7 @@ all: $(DEPENDS) $(OBJECTS)
 	$(CC) -o $(TARGET) $(OBJECTS) $(CPPFLAGS) $(LDFLAGS)
 
 clean:
-	rm -rf $(TARGET) $(OBJECTS)
+	rm -rf $(TARGET) rcu_bench?.o
 
 .c.o: $(.cpp.o)
 .cpp.o:
