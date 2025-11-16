@@ -40,7 +40,7 @@ Therefore, the memory is reclaimed when all references to all shared_ptrs are re
   <thead>
     <tr>
       <th>Implementation</th>
-      <th>Reads/sec</th>
+      <th>Total read</th>
       <th>Relative Performance</th>
       <th>Update (200 attempts)</th>
     </tr>
@@ -74,7 +74,7 @@ Therefore, the memory is reclaimed when all references to all shared_ptrs are re
   <thead>
     <tr>
       <th>Implementation</th>
-      <th>Reads/sec</th>
+      <th>Total read</th>
       <th>Relative Performance</th>
       <th>Update (200 attempts)</th>
     </tr>
@@ -107,7 +107,7 @@ Therefore, the memory is reclaimed when all references to all shared_ptrs are re
   <thead>
     <tr>
       <th>Implementation</th>
-      <th>Reads/sec</th>
+      <th>Total read</th>
       <th>Relative Performance</th>
       <th>Update (200 attempts)</th>
     </tr>
