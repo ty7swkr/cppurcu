@@ -400,3 +400,10 @@ Run tests with different data sizes:
 ./rcu_bench 100000    # 100K items
 ./rcu_bench 1000000   # 1M items, Memory required is 20G
 ```
+<br>
+
+### Author's Note
+
+When the fast-path idea suddenly came to me, I was really excited, 
+and it was fun to implement it. 😊<br>
+— since October 2025
