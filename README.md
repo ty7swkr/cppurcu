@@ -402,8 +402,3 @@ Run tests with different data sizes:
 ```
 <br>
 
-### Author's Note
-
-When the fast-path idea suddenly came to me, I was really excited, 
-and it was fun to implement it. 😊<br>
-— since October 2025
