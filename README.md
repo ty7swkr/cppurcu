@@ -25,9 +25,108 @@ auto data = storage.load(); // Returns guard object
 *Note1: Unlike traditional RCU, cppurcu does not directly reclaim the old data,
 but delegates reclamation to `std::shared_ptr`.
 The `std::shared_ptr` reference to the old object is released upon the first `load()` call within the scope.
-Therefore, memory is reclaimed when all references to all `std::shared_ptr` instances are released.*<br><br>
+Therefore, memory is reclaimed when all references to all `std::shared_ptr` instances are released.*<br>
 
 *Note2: Consequently, update calls are deadlock-free regardless of their location.*
+<br>
+<br>
+
+## Quick Start
+
+### Basic Usage
+```cpp
+#include <cppurcu/cppurcu.h>
+#include <memory>
+#include <string>
+#include <map>
+
+// Create a storage with initial data
+auto storage = cppurcu::create(std::make_shared<std::map<std::string, std::string>>());
+
+// Read (lock-free) - returns a guard object
+auto data = storage.load(); // cppurcu::guard<T>
+if (data->count("key") > 0) {
+  // Use the data
+}
+
+// Update (immediate, delegates reclamation to std::shared_ptr)
+auto new_data = std::make_shared<std::map<std::string, std::string>>();
+(*new_data)["key"] = "value";
+storage = new_data; // or storage.update(new_data);
+```
+**⚠️ Important:**
+- The `storage<T>` instance must outlive all threads that use it
+- Destroying `storage` while threads are still accessing it results in undefined behavior
+- Typically, declare `storage` as a global, static, or long-lived member variable
+
+### Snapshot Isolation
+Even when multiple `storage::load()` calls occur across complex call chains within a specific scope in the same thread, or when data updates occur from other threads, all read operations within that thread are enforced to see the same data version.
+
+When all guards are destroyed, the next load() gets the updated version
+```cpp
+{
+  auto data = storage.load();    // Snapshot version 1
+  {
+    storage.update(new_data2);   // Update to version 2
+    auto data1 = storage.load(); // Still Snapshot version 1
+  } // data1 Guard destroyed
+} // data Guard destroyed
+
+storage.update(new_data3);       // Update to version 3
+{
+  auto data = storage.load();    // Loads version 3
+}
+```
+### Multiple Storages Snapshot
+
+When you need to load (snapshot) multiple storages in a single line, you can use `guard_pack` as follows:
+```cpp
+#include <cppurcu/cppurcu.h>
+
+// Multiple data storages
+auto storageA = cppurcu::create(...);
+auto storageB = cppurcu::create(...);
+auto storageC = cppurcu::create(...);
+
+// Load all at once - ensures same snapshot point
+const auto &[a, b, c] = cppurcu::make_guard_pack(storageA, storageB, storageC);
+
+// All reads within this scope see consistent data
+// even if updates occur from other threads
+a->lookup(...);
+b->query(...);
+c->find(...);
+```
+**Note:**<br>
+- `guard_pack` loads a snapshot from each storage and keeps them alive within the same scope, but it does **not** provide global transactional atomicity across multiple storages.
+- Each storage is still versioned independently; `guard_pack` is an RAII helper for convenient multi-storage snapshot loading, not a cross-storage transaction mechanism.
+
+### With Background Destruction (Optional)
+
+For objects with expensive destructors, you can use a reclaimer_thread to handle destruction in the background:
+```cpp
+#include <cppurcu/cppurcu.h>
+
+// Create a reclaimer_thread
+auto reclaimer = std::make_shared<cppurcu::reclaimer_thread>();
+
+// Create storage with reclaimer_thread
+auto storage1 = cppurcu::create(std::make_shared<std::set<std::string>>(), reclaimer);
+
+// reclaimer_thread can be used regardless of template type.
+auto storage2 = cppurcu::create(std::make_shared<std::vector<int>>(), reclaimer);
+
+// Somewhere in the source...(update)
+storage1 = new_data;
+
+// calls load, it gets the updated object.
+// The old object is destroyed in the background thread(reclaimer_thread)
+auto data = storage1.load();
+
+```
+**Note (behavior change)**<br>
+- Previously, the system used the `reclaimer_thread` (and its mutex) to handle the previous data when updating with new data.
+- Currently, the reader no longer uses the `reclaimer_thread` (or its mutex); the `reclaimer_thread` is only used by `storage<T>::update()`.
 <br>
 
 ## Performance
@@ -140,104 +239,6 @@ In this run, liburcu recorded approximately 175 updates, but this figure may var
 <br>
 <br>
 
-## Quick Start
-
-### Basic Usage
-```cpp
-#include <cppurcu/cppurcu.h>
-#include <memory>
-#include <string>
-#include <map>
-
-// Create a storage with initial data
-auto storage = cppurcu::create(std::make_shared<std::map<std::string, std::string>>());
-
-// Read (lock-free) - returns a guard object
-auto data = storage.load(); // cppurcu::guard<T>
-if (data->count("key") > 0) {
-  // Use the data
-}
-
-// Update (immediate, delegates reclamation to std::shared_ptr)
-auto new_data = std::make_shared<std::map<std::string, std::string>>();
-(*new_data)["key"] = "value";
-storage = new_data; // or storage.update(new_data);
-```
-**⚠️ Important:**
-- The `storage<T>` instance must outlive all threads that use it
-- Destroying `storage` while threads are still accessing it results in undefined behavior
-- Typically, declare `storage` as a global, static, or long-lived member variable
-
-### Snapshot Isolation
-Even when multiple `storage::load()` calls occur across complex call chains within a specific scope in the same thread, or when data updates occur from other threads, all read operations within that thread are enforced to see the same data version.
-
-When all guards are destroyed, the next load() gets the updated version
-```cpp
-{
-  auto data = storage.load();    // Snapshot version 1
-  {
-    storage.update(new_data2);   // Update to version 2
-    auto data1 = storage.load(); // Still Snapshot version 1
-  } // data1 Guard destroyed
-} // data Guard destroyed
-
-storage.update(new_data3);       // Update to version 3
-{
-  auto data = storage.load();    // Loads version 3
-}
-```
-### Multiple Storages Snapshot
-
-When you need to load (snapshot) multiple storages in a single line, you can use `guard_pack` as follows:
-```cpp
-#include <cppurcu/cppurcu.h>
-
-// Multiple data storages
-auto storageA = cppurcu::create(...);
-auto storageB = cppurcu::create(...);
-auto storageC = cppurcu::create(...);
-
-// Load all at once - ensures same snapshot point
-const auto &[a, b, c] = cppurcu::make_guard_pack(storageA, storageB, storageC);
-
-// All reads within this scope see consistent data
-// even if updates occur from other threads
-a->lookup(...);
-b->query(...);
-c->find(...);
-```
-**Note:**<br>
-- `guard_pack` loads a snapshot from each storage and keeps them alive within the same scope, but it does **not** provide global transactional atomicity across multiple storages.
-- Each storage is still versioned independently; `guard_pack` is an RAII helper for convenient multi-storage snapshot loading, not a cross-storage transaction mechanism.
-
-### With Background Destruction (Optional)
-
-For objects with expensive destructors, you can use a reclaimer_thread to handle destruction in the background:
-```cpp
-#include <cppurcu/cppurcu.h>
-
-// Create a reclaimer_thread
-auto reclaimer = std::make_shared<cppurcu::reclaimer_thread>();
-
-// Create storage with reclaimer_thread
-auto storage1 = cppurcu::create(std::make_shared<std::set<std::string>>(), reclaimer);
-
-// reclaimer_thread can be used regardless of template type.
-auto storage2 = cppurcu::create(std::make_shared<std::vector<int>>(), reclaimer);
-
-// Somewhere in the source...(update)
-storage1 = new_data;
-
-// calls load, it gets the updated object.
-// The old object is destroyed in the background thread(reclaimer_thread)
-auto data = storage1.load();
-
-```
-**Note (behavior change)**<br>
-- Previously, the system used the `reclaimer_thread` (and its mutex) to handle the previous data when updating with new data.
-- Currently, the reader no longer uses the `reclaimer_thread` (or its mutex); the `reclaimer_thread` is only used by `storage<T>::update()`.
-<br>
-
 ## Installation
 
 cppurcu is a header-only library. Copy the cppurcu/ directory to your include path:
@@ -253,7 +254,6 @@ g++ -I./path/to/cppurcu your_code.cpp
 ### Requirements
 
 - C++17 or later
-<br>
 <br>
 
 ## Building the Tests
@@ -276,7 +276,6 @@ make liburcu
 - `make` - Builds tests with cppurcu and mutex (default)
 - `make liburcu` - Builds tests including liburcu comparison
 - `make clean` - Removes build artifacts
-<br>
 <br>
 
 ## API Reference
@@ -316,8 +315,6 @@ Creates a new storage with initial data.
 **`void operator=(std::shared_ptr<const T> value)`**
 - Convenience operator for updates
 - Equivalent to `update(value)`
-<br>
-<br>
 
 ### `cppurcu::guard<T>`
 
@@ -344,7 +341,6 @@ if (guard) {
 }
 // Guard destroyed here, data may be updated by next load()
 ```
-<br>
 
 ### `cppurcu::guard_pack<Ts...>`
 
@@ -378,7 +374,6 @@ a->method_a();
 b->method_b();
 c->method_c();
 ```
-<br>
 
 ### `cppurcu::make_guard_pack`
 
@@ -395,8 +390,6 @@ guard_pack<Ts...> make_guard_pack(storage<Ts>&... storages);
 
 #### Returns
 - `guard_pack` containing guards for all storages
-<br>
-<br>
 
 ### `cppurcu::reclaimer_thread`
 
@@ -429,7 +422,6 @@ Background thread for handling object destruction.
 
 **`std::thread::id thread_id() const`**
 - ID of the reclaimer_thread
-<br>
 <br>
 
 ## How It Works
@@ -468,7 +460,6 @@ When enabled, reclaimer_thread handles object destruction in the background:
 - Lock-free reads
 - Thread-safe updates
 - **Requirement**: `storage<T>` lifetime > thread lifetime
-<br>
 <br>
 
 ## Tests

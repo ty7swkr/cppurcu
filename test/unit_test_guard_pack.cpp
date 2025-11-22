@@ -1,5 +1,4 @@
 #include <cppurcu/cppurcu.h>
-#include <cppurcu/guard_pack.h>
 
 #include <iostream>
 #include <thread>
