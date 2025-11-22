@@ -24,7 +24,7 @@ namespace cppurcu
  *
  * A worker thread scans ptrs_ on notification or when reclaim_interval_ expires.
  * If reclaim_interval_ == 0μs, it scans only on notification.
- * Entries are removed only when shared_ptr::unique() == true.
+ * Entries are removed only when shared_ptr::use_count() == 1.(unique())
  * Attempts to destroy all tracked objects before the thread exits,
  * but cannot guarantee completion if shared_ptrs are still referenced elsewhere.
  */
@@ -107,7 +107,7 @@ protected:
 
         for (auto it = ptrs_.begin(); it != ptrs_.end();)
         {
-          if ((*it).unique() == false) { ++it; continue; }
+          if ((*it).use_count() > 1) { ++it; continue; }
 
           unique_ptrs.emplace_back(std::move(*it));
           it = ptrs_.erase(it);

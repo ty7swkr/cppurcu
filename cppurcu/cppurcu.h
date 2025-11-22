@@ -7,4 +7,4 @@
 
 #pragma once
 
-#include <cppurcu/storage.h>
+#include <cppurcu/guard_pack.h>

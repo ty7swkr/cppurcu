@@ -12,6 +12,7 @@
 #include <memory>
 #include <functional>
 #include <optional>
+#include <atomic>
 
 namespace cppurcu
 {
@@ -61,8 +62,8 @@ protected:
    */
   static std::unordered_map<uint64_t, T> & storage_()
   {
-    static thread_local std::unordered_map<uint64_t, T> s;
-    return s;
+    static thread_local std::unordered_map<uint64_t, T> storage;
+    return storage;
   }
 
   static inline std::atomic<uint64_t> self_allocator_{0};

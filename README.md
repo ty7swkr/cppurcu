@@ -9,7 +9,8 @@ A simple implementation of the C++ RCU (read-copy-update) user-space library tha
 
 - **Header-Only**: Works with standard library only, no external dependencies
 - **Lock-Free Reads**: Implemented so that contention is minimized on the read path after cache warm-up.
-- **Snapshot Isolation**: RAII guard pattern for snapshot isolation in the calling thread
+- **Snapshot Isolation**: RAII guard pattern for snapshot isolation in the calling thread.<br>
+(guard_pack loads multiple storages in a single line.)
 - **No Data Duplication**: Data is not deep-copied per thread
 - **Optional Background Destruction**: reclaimer_thread can offload object destruction to a separate thread, reducing burden on reader threads
 <br>
@@ -18,19 +19,20 @@ A simple implementation of the C++ RCU (read-copy-update) user-space library tha
 
 No reader registration, grace period management, or memory barriers required.<br>
 ```cpp
-storage = new_storage;      // Update example (shared_ptr:new_storage)
+storage = new_storage;      // Update example (std::shared_ptr<T> new_storage)
 auto data = storage.load(); // Returns guard object
 ```
 *Note1: Unlike traditional RCU, cppurcu does not directly reclaim the old data,
-but delegates the reclaim to std::shared_ptr. 
-The std::shared_ptr reference to the old object is released upon the first load() call within the scope.
-Therefore, the memory is reclaimed when all references to all shared_ptrs are released.*<br><br>
+but delegates reclamation to `std::shared_ptr`.
+The `std::shared_ptr` reference to the old object is released upon the first `load()` call within the scope.
+Therefore, memory is reclaimed when all references to all `std::shared_ptr` instances are released.*<br><br>
+
 *Note2: Consequently, update calls are deadlock-free regardless of their location.*
 <br>
 
 ## Performance
 
-*These tests uses pre-built data structures to measure RCU performance without memory allocation overhead.*<br>
+*These tests use pre-built data structures to measure RCU performance without memory allocation overhead.*<br>
 *Updates occur every 100ms.*
 
 #### 300K items, 10 reader threads, 2 writer threads, 10 seconds:
@@ -129,12 +131,12 @@ Therefore, the memory is reclaimed when all references to all shared_ptrs are re
       <td>liburcu</td>
       <td>79.6M</td>
       <td>12.0x</td>
-      <td>175</font></td>
+      <td>175</td>
     </tr>
   </tbody>
 </table>
 Results may vary depending on environment and configuration.<br>
-In this run, liburcu recorded approximately 175 updates, although this figure may vary depending on the environment and configuration.
+In this run, liburcu recorded approximately 175 updates, but this figure may vary across different environments and configurations.
 <br>
 <br>
 
@@ -157,7 +159,7 @@ if (data->count("key") > 0) {
 }
 
 // Update (immediate, delegates reclamation to std::shared_ptr)
-auto new_data = std::make_shared<std::map>();
+auto new_data = std::make_shared<std::map<std::string, std::string>>();
 (*new_data)["key"] = "value";
 storage = new_data; // or storage.update(new_data);
 ```
@@ -169,7 +171,7 @@ storage = new_data; // or storage.update(new_data);
 ### Snapshot Isolation
 Even when multiple `storage::load()` calls occur across complex call chains within a specific scope in the same thread, or when data updates occur from other threads, all read operations within that thread are enforced to see the same data version.
 
-When all guards are destroyed, next load() gets the updated version
+When all guards are destroyed, the next load() gets the updated version
 ```cpp
 {
   auto data = storage.load();    // Snapshot version 1
@@ -184,6 +186,26 @@ storage.update(new_data3);       // Update to version 3
   auto data = storage.load();    // Loads version 3
 }
 ```
+### Multiple Storages Snapshot
+
+When you need to load (snapshot) multiple storages in a single line, you can use `guard_pack` as follows:
+```cpp
+#include <cppurcu/cppurcu.h>
+
+// Multiple data storages
+storage<TableA> storageA(init_a);
+storage<TableB> storageB(init_b);
+storage<TableC> storageC(init_c);
+
+// Load all at once - ensures same snapshot point
+const auto &[a, b, c] = make_guard_pack(storageA, storageB, storageC);
+
+// All reads within this scope see consistent data
+// even if updates occur from other threads
+a->lookup(...);
+b->query(...);
+c->find(...);
+```
 
 ### With Background Destruction (Optional)
 
@@ -191,10 +213,10 @@ For objects with expensive destructors, you can use a reclaimer_thread to handle
 ```cpp
 #include <cppurcu/cppurcu.h>
 
-// Create a reclaimer thread
+// Create a reclaimer_thread
 auto reclaimer = std::make_shared<cppurcu::reclaimer_thread>();
 
-// Create storage with reclaimer thread
+// Create storage with reclaimer_thread
 auto storage1 = cppurcu::create(std::make_shared<std::set<std::string>>(), reclaimer);
 
 // reclaimer_thread can be used regardless of template type.
@@ -208,8 +230,9 @@ storage1 = new_data;
 auto data = storage1.load();
 
 ```
-**Note:** When using reclaimer_thread, the reader uses the reclaimer_thread's mutex when updating with new data.
-<br>
+**Note (behavior change)**<br>
+- Previously, the system used the `reclaimer_thread` (and its mutex) to handle the previous data when updating with new data.
+- Currently, the reader no longer uses the `reclaimer_thread` (or its mutex); the `reclaimer_thread` is only used by `storage<T>::update()`.
 <br>
 
 ## Installation
@@ -228,6 +251,7 @@ g++ -I./path/to/cppurcu your_code.cpp
 
 - C++17 or later
 <br>
+<br>
 
 ## Building the Tests
 
@@ -241,7 +265,7 @@ make
 make liburcu
 
 # Run Tests
-./rcu_bench 1000000  # Test with 1M items, Memory required is 20G
+./rcu_bench 1000000  # Test with 1M items, memory required is 20GB
 ```
 
 ### Makefile Options
@@ -249,6 +273,7 @@ make liburcu
 - `make` - Builds tests with cppurcu and mutex (default)
 - `make liburcu` - Builds tests including liburcu comparison
 - `make clean` - Removes build artifacts
+<br>
 <br>
 
 ## API Reference
@@ -288,6 +313,8 @@ Creates a new storage with initial data.
 **`void operator=(std::shared_ptr<const T> value)`**
 - Convenience operator for updates
 - Equivalent to `update(value)`
+<br>
+<br>
 
 ### `cppurcu::guard<T>`
 
@@ -314,6 +341,59 @@ if (guard) {
 }
 // Guard destroyed here, data may be updated by next load()
 ```
+<br>
+
+### `cppurcu::guard_pack<Ts...>`
+
+RAII guard pack for loading multiple storages at once.
+
+#### Notes
+- Cannot be copied or moved.
+- Storages are loaded in order (left to right) and destruction occurs in reverse order (LIFO).
+- If an exception occurs during construction, already constructed guards are properly destroyed.
+- Must not outlive the storages it references.
+
+#### Methods
+
+**`template<std::size_t I> auto& get()`**
+- Access guard at compile-time index I
+
+**`static constexpr std::size_t size()`**
+- Returns the number of guards in the pack
+
+#### Example
+```cpp
+auto pack = make_guard_pack(storageA, storageB, storageC);
+
+pack.get<0>()->method_a();
+pack.get<1>()->method_b();
+pack.get<2>()->method_c();
+
+// Structured binding
+const auto& [a, b, c] = make_guard_pack(storageA, storageB, storageC);
+a->method_a();
+b->method_b();
+c->method_c();
+```
+<br>
+
+### `cppurcu::make_guard_pack`
+
+Factory function that creates a guard_pack from multiple storages.
+
+#### Signature
+```cpp
+template<typename... Ts>
+guard_pack<Ts...> make_guard_pack(storage<Ts>&... storages);
+```
+
+#### Parameters
+- `storages`: References to storage instances to load from
+
+#### Returns
+- `guard_pack` containing guards for all storages
+<br>
+<br>
 
 ### `cppurcu::reclaimer_thread`
 
@@ -332,10 +412,10 @@ Background thread for handling object destruction.
 *Objects that are still referenced elsewhere cannot be reclaimed and remain in the queue.*
 
 **Parameters:**
-- `wait_until_execution` (optional): If true, constructor waits until the reclaimer thread starts. If false, returns immediately.
+- `wait_until_execution` (optional): If true, constructor waits until the reclaimer_thread starts. If false, returns immediately.
 - `reclaim_interval` (optional, default: 10000μs = 10ms): Interval for periodic scanning of the reclaim queue.
-  - If > 0μs: Scans periodically at the specified interval, in addition to notifications.
-  - If 0μs: Notification-only mode. Scans only when push() is called. Not recommended - may delay reclamation if updates are infrequent.
+  - If interval > 0μs: Scans periodically at the specified interval, in addition to notifications.
+  - If interval is 0μs: Notification-only mode. Scans only when push() is called. Not recommended - may delay reclamation if updates are infrequent.
 
 
 #### Methods
@@ -345,7 +425,8 @@ Background thread for handling object destruction.
 - Usually called internally by storage::load() when data is updated
 
 **`std::thread::id thread_id() const`**
-- ID of the reclaimer thread
+- ID of the reclaimer_thread
+<br>
 <br>
 
 ## How It Works
@@ -385,6 +466,7 @@ When enabled, reclaimer_thread handles object destruction in the background:
 - Thread-safe updates
 - **Requirement**: `storage<T>` lifetime > thread lifetime
 <br>
+<br>
 
 ## Tests
 
@@ -398,7 +480,6 @@ Run tests with different data sizes:
 ```bash
 ./rcu_bench 1000      # 1K items
 ./rcu_bench 100000    # 100K items
-./rcu_bench 1000000   # 1M items, Memory required is 20G
+./rcu_bench 1000000   # 1M items, memory required is 20GB
 ```
-<br>
 

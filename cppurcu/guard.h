@@ -37,10 +37,15 @@ class guard final
 {
 public:
   guard(const guard &) = delete;
-  guard(guard &&other) = delete;
   guard &operator=(const guard &) = delete;
 
-  ~guard() noexcept { --tls_value_.ref_count; }
+  ~guard() noexcept
+  {
+    if (moved_ == true)
+      return;
+
+    --tls_value_.ref_count;
+  }
 
   // Pointer-like access
   // const T * objects returned as operator->() are very dangerous if stored separately
@@ -53,6 +58,9 @@ public:
 
 protected:
   friend class local<T>;
+
+  template<typename... Us>
+  friend class guard_pack;
 
   guard(tls_value_t<T> &tls_value, const source<T> &source)
   : tls_value_(tls_value), source_(source)
@@ -70,9 +78,17 @@ protected:
     }
   }
 
+  // private move constructor - only accessible by guard_pack
+  guard(guard &&other) noexcept
+  : tls_value_(other.tls_value_), source_(other.source_)
+  {
+    other.moved_ = true;
+  }
+
 private:
-  tls_value_t<T>    &tls_value_;
-  const source<T>   &source_;
+  tls_value_t<T>  &tls_value_;
+  const source<T> &source_;
+  bool            moved_ = false;
 };
 
 }
