@@ -193,12 +193,12 @@ When you need to load (snapshot) multiple storages in a single line, you can use
 #include <cppurcu/cppurcu.h>
 
 // Multiple data storages
-storage<TableA> storageA(init_a);
-storage<TableB> storageB(init_b);
-storage<TableC> storageC(init_c);
+auto storageA = cppurcu::create(...);
+auto storageB = cppurcu::create(...);
+auto storageC = cppurcu::create(...);
 
 // Load all at once - ensures same snapshot point
-const auto &[a, b, c] = make_guard_pack(storageA, storageB, storageC);
+const auto &[a, b, c] = cppurcu::make_guard_pack(storageA, storageB, storageC);
 
 // All reads within this scope see consistent data
 // even if updates occur from other threads
@@ -206,6 +206,9 @@ a->lookup(...);
 b->query(...);
 c->find(...);
 ```
+**Note:**<br>
+- `guard_pack` loads a snapshot from each storage and keeps them alive within the same scope, but it does **not** provide global transactional atomicity across multiple storages.
+- Each storage is still versioned independently; `guard_pack` is an RAII helper for convenient multi-storage snapshot loading, not a cross-storage transaction mechanism.
 
 ### With Background Destruction (Optional)
 
@@ -363,14 +366,14 @@ RAII guard pack for loading multiple storages at once.
 
 #### Example
 ```cpp
-auto pack = make_guard_pack(storageA, storageB, storageC);
+auto pack = cppurcu::make_guard_pack(storageA, storageB, storageC);
 
 pack.get<0>()->method_a();
 pack.get<1>()->method_b();
 pack.get<2>()->method_c();
 
 // Structured binding
-const auto& [a, b, c] = make_guard_pack(storageA, storageB, storageC);
+const auto& [a, b, c] = cppurcu::make_guard_pack(storageA, storageB, storageC);
 a->method_a();
 b->method_b();
 c->method_c();
