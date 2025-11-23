@@ -87,7 +87,7 @@ auto storageA = cppurcu::create(...);
 auto storageB = cppurcu::create(...);
 auto storageC = cppurcu::create(...);
 
-// Load all at once – maintains the same snapshot point
+// Load all – maintains the same snapshot point
 const auto &[a, b, c] = cppurcu::make_guard_pack(storageA, storageB, storageC);
 
 // All reads within this scope see consistent data,
@@ -102,8 +102,11 @@ If you need a consistent snapshot within a specific scope, you can write code li
 ...........
 {
   auto pack = cppurcp::make_guard_pack(storageA, storageB, storageC);
+  // or `guard<T>` object from storage<T>::load()
+  auto pack = cppurcp::make_guard_pack(storageA.load(), storageB.load(), storageC.load());
   .....
-  // Even if storageA and storageC are used here, 
+  // Even if storageA and storageC are used somewhere in the call chain 
+  // within the calculate(...) function,
   // the pack maintains a consistent snapshot of storageA, B, and C.
   my_class.calculate(...);
   .....
@@ -111,7 +114,6 @@ If you need a consistent snapshot within a specific scope, you can write code li
 ```
 
 **Note:**<br>
-- `guard_pack` loads a snapshot from each storage and keeps them alive within the same scope, but it does **not** provide global transactional atomicity across multiple storages.
 - Each storage is still versioned independently; `guard_pack` is an RAII helper for convenient multi-storage snapshot loading, not a cross-storage transaction mechanism.
 
 ### With Background Destruction (Optional)
@@ -318,7 +320,7 @@ Creates a new storage with initial data.
 **`guard<T> load()`**
 - Thread-safe
 - Returns a guard object that provides access to the current data
-- On the first load() within the scope, if there is new data, replace it with the new data and release the shared_ptr of the previous data.
+- On the first load() within the scope, if there is new data, replace it with the new data.
 
 **`void update(std::shared_ptr<const T> value)`**
 - Publishes new data
@@ -357,12 +359,10 @@ if (guard) {
 
 ### `cppurcu::guard_pack<Ts...>`
 
-RAII guard pack for loading multiple storages at once.
-
+An RAII helper that manages multiple guards as a single object
+ 
 #### Notes
 - Cannot be copied or moved.
-- Storages are loaded in order (left to right) and destruction occurs in reverse order (LIFO).
-- If an exception occurs during construction, already constructed guards are properly destroyed.
 - Must not outlive the storages it references.
 
 #### Methods
@@ -376,6 +376,8 @@ RAII guard pack for loading multiple storages at once.
 #### Example
 ```cpp
 auto pack = cppurcu::make_guard_pack(storageA, storageB, storageC);
+// or
+auto pack = cppurcu::make_guard_pack(storageA.load(), storageB.load(), storageC.load());
 
 pack.get<0>()->method_a();
 pack.get<1>()->method_b();
@@ -396,10 +398,14 @@ Factory function that creates a guard_pack from multiple storages.
 ```cpp
 template<typename... Ts>
 guard_pack<Ts...> make_guard_pack(storage<Ts>&... storages);
+
+template<typename... Ts>
+guard_pack<Ts...> make_guard_pack(guard<Ts>&&... guards);
 ```
 
 #### Parameters
 - `storages`: References to storage instances to load from
+- `guards`: `guard<T>` instances to move into the pack
 
 #### Returns
 - `guard_pack` containing guards for all storages

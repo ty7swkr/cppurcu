@@ -21,96 +21,116 @@ class guard_pack;
 /**
  * @brief Creates a guard_pack from multiple storages
  *
- * Factory function that loads all storages atomically and returns
+ * Factory function that loads all storages in sequence and returns
  * a guard_pack holding all guards. This ensures snapshot isolation
  * across multiple storages within the same scope.
  *
  * @tparam Ts Types stored in each storage
- * @param storages Reference to storage instances to load from
+ * @param storages References to storage instances to load from
  * @return guard_pack containing guards for all storages
  *
- * @note All storages are loaded in order (left to right).
- *       If an exception occurs during construction, already
- *       constructed guards are properly destroyed.
+ * @throws Any exception thrown by storage::load()
+ *         If an exception occurs during load, the guards that have already been created
+ *         are automatically destroyed via stack unwinding.
  *
- * ## Lifetime
+ * @note This is equivalent to:
+ *       make_guard_pack(storage1.load(), storage2.load(), ...)
+ *       Guards are loaded left-to-right.
  *
- * - guard_pack must not outlive the storages it references
- * - All guards share the same snapshot isolation scope
- * - Destruction occurs in reverse order (LIFO)
+ * @example Structured binding (C++17)
+ * @code
+ * auto g1 = cppurcu::storage(...);
+ * auto g2 = cppurcu::storage(...);
  *
- * @example Basic usage with get<I>()
+ * // Must use 'const auto&' - guard_pack is non-copyable/non-movable
+ * // In C++17, structured binding's const reference return is a method with guaranteed safety defined in the specification
+ * const auto &[config, cache] = make_guard_pack(g1, g2);
+ *
+ * config->config_value;
+ * cache->cache_value;
+ * @endcode
+ *
+ * @example
  * @code
  * storage<Config> config_storage(config_data);
  * storage<Cache>  cache_storage(cache_data);
  *
  * auto pack = make_guard_pack(config_storage, cache_storage);
- *
- * pack.get<0>()->config_value;  // Access Config
- * pack.get<1>()->cache_value;   // Access Cache
- * @endcode
- *
- * @example Structured binding (C++17)
- * @code
- * // Must use 'const auto&' - guard_pack is non-copyable/non-movable
- * const auto& [config, cache] = make_guard_pack(config_storage,
- *                                                cache_storage);
- *
- * config->config_value;  // Access via guard<Config>
- * cache->cache_value;    // Access via guard<Cache>
- * @endcode
- *
- * @example Snapshot isolation across multiple storages
- * @code
- * {
- *   auto pack = make_guard_pack(storeA, storeB);
- *
- *   store1.update(new_data1);  // Update from another thread
- *   store2.update(new_data2);
- *
- *   // pack still sees the old versions of both stores
- *   pack.get<0>()->...;  // Old dataA
- *   pack.get<1>()->...;  // Old dataB
- * }
- * // After pack destroyed, next load() sees new versions
+ * pack.get<0>()->config_value;
+ * pack.get<1>()->cache_value;
  * @endcode
  */
 template<typename... Ts>
 guard_pack<Ts...>
-make_guard_pack(storage<Ts> &... storages);
+make_guard_pack(storage<Ts> &... storages)
+{
+  return make_guard_pack(storages.load()...);
+}
 
 /**
- * @brief RAII guard pack for multiple storages with snapshot isolation
+ * @brief Creates a guard_pack from multiple guards
  *
- * Holds multiple guard<T> objects in a single container, ensuring all
- * loaded data maintains snapshot isolation together.
+ * This function is the guard<T> version of make_guard_pack(storage...).
+ * It's simply useful for isolating multiple guards on a single line.
  *
- * @tparam Ts Types stored in each storage
+ * @tparam Ts Types managed by each guard
+ * @param guards Guard instances to move into the pack
+ * @return guard_pack containing all guards
+ *
+ * @note The lvalue version of make_guard_pack(guards...) was intentionally deleted.
+ *
+ * ## Lifetime
+ * - guard_pack must not outlive the storages that the guards reference
+ * - All guards share the same lifetime within this scope
+ * - Destruction occurs in reverse order (LIFO)
+ *
+ * @example Usage with get<I>()
+ * @code
+ * auto pack = make_guard_pack(g1.load(), g2.load());
+ *
+ * pack.get<0>()->config_value;
+ * pack.get<1>()->cache_value;
+ * @endcode
+ */
+template<typename... Ts>
+guard_pack<Ts...>
+make_guard_pack(guard<Ts> &&... guards);
+
+template<typename... Ts>
+guard_pack<Ts...> make_guard_pack(guard<Ts> &... guards) = delete;
+
+/**
+ * @brief RAII guard pack for multiple guards
+ *
+ * Holds multiple guard<T> objects in a single container.
+ * Guards are moved into the pack and destroyed in reverse order.
+ *
+ * @tparam Ts Types stored in each guard
  */
 template<typename... Ts>
 class guard_pack
 {
 public:
-  static_assert(sizeof...(Ts) > 0, "guard_pack requires at least one storage");
+  static_assert(sizeof...(Ts) > 0, "guard_pack requires at least one guard");
 
   /**
-   * @brief Constructs guard_pack by loading all storages
+   * @brief Constructs guard_pack by moving guards
    *
-   * Loads each storage in order and stores the resulting guards
+   * Moves each guard in order and stores them
    * in the internal byte array using placement new.
    *
-   * @param storages References to storage instances
+   * @param guards Guard instances to move
    *
-   * @throws Any exception thrown by storage::load() or guard move constructor.
+   * @throws Any exception thrown by guard move constructor.
    *         If an exception occurs, already constructed guards are destroyed
    *         in reverse order before re-throwing.
    */
-  guard_pack(storage<Ts> &... storages)
+  guard_pack(guard<Ts> &&... guards)
   {
-    construct_guards<0>(storages...);
+    construct_guards<0>(std::move(guards)...);
   }
 
-  // Non-copyable and non-movable to maintain snapshot isolation integrity
+  // Non-copyable and non-movable
   guard_pack(const guard_pack &) = delete;
   guard_pack(guard_pack &&) = delete;
   guard_pack &operator=(const guard_pack &) = delete;
@@ -138,7 +158,9 @@ public:
    *       for accessing the underlying data.
    *
    * @code
-   * auto pack = make_guard_pack(int_storage, string_storage);
+   * auto g1 = int_storage.load();
+   * auto g2 = string_storage.load();
+   * auto pack = make_guard_pack(std::move(g1), std::move(g2));
    * int val = *pack.get<0>();           // Dereference int
    * size_t len = pack.get<1>()->size(); // Access string method
    * @endcode
@@ -167,7 +189,7 @@ public:
 
   /**
    * @brief Returns the number of guards in the pack
-   * @return sizeof...(Ts), the number of storages/guards
+   * @return sizeof...(Ts), the number of guards
    */
   static constexpr std::size_t size() noexcept { return sizeof...(Ts); }
 
@@ -250,46 +272,29 @@ private:
   /**
    * @brief Recursively constructs guards via placement new
    *
-   * Constructs guard<U> at the correct offset, then recursively
-   * constructs remaining guards. Provides strong exception safety:
-   * if construction fails, already-constructed guards are destroyed.
+   * Move-constructs guard<U> at the correct offset, then recursively
+   * constructs remaining guards.
    *
    * @tparam I Current index being constructed
-   * @tparam U Type of current storage
-   * @tparam Us Types of remaining storages
-   * @param s Current storage to load
-   * @param rest Remaining storages to load
+   * @tparam U Type of current guard
+   * @tparam Us Types of remaining guards
+   * @param g Current guard to move
+   * @param rest Remaining guards to move
    *
-   * @throws Any exception from storage::load() or guard construction.
+   * @throws Any exception from guard move constructor.
    *         On exception, destroys the guard at index I before re-throwing.
    *
-   * @note Uses move construction from storage::load() result.
+   * @note Uses move construction from the passed guard.
    *       guard<T> has a private move constructor accessible via friend.
    */
   template<std::size_t I, typename U, typename... Us>
-  void construct_guards(storage<U> &s, storage<Us> &... rest)
+  void construct_guards(guard<U> &&g, guard<Us> &&... rest)
   {
-    // Calculate placement address for this guard
     void *ptr = &storage_[offset<I>()];
-
-    // Move-construct guard from storage::load() result
-    new (ptr) guard<U>(std::move(s.load()));
+    new (ptr) guard<U>(std::move(g));
 
     if constexpr (sizeof...(Us) > 0)
-    {
-      try
-      {
-        // Recursively construct remaining guards
-        construct_guards<I + 1>(rest...);
-      }
-      catch (...)
-      {
-        // Exception safety: destroy this guard before re-throwing
-        auto* p = std::launder(reinterpret_cast<guard<U>*>(ptr));
-        p->~guard();
-        throw;
-      }
-    }
+      construct_guards<I + 1>(std::move(rest)...);
   }
 
   /**
@@ -335,9 +340,9 @@ private:
  */
 template<typename... Ts>
 guard_pack<Ts...>
-make_guard_pack(storage<Ts> &... storages)
+make_guard_pack(guard<Ts> &&... guards)
 {
-  return guard_pack<Ts...>(storages...);
+  return guard_pack<Ts...>(std::move(guards)...);
 }
 
 } // namespace cppurcu
@@ -393,7 +398,10 @@ namespace cppurcu
  *
  * Enables structured binding syntax:
  * @code
- * auto& [a, b, c] = pack;  // Calls get<0>, get<1>, get<2>
+ * auto g1 = s1.load();
+ * auto g2 = s2.load();
+ * auto g3 = s3.load();
+ * auto& [a, b, c] = make_guard_pack(std::move(g1), std::move(g2), std::move(g3));
  * @endcode
  *
  * @tparam I Index of element to retrieve
@@ -413,7 +421,9 @@ auto &get(guard_pack<Ts...> &pack)
  * Const version for use with const guard_pack references.
  *
  * @code
- * const auto& [a, b] = make_guard_pack(s1, s2);  // Uses const get
+ * auto g1 = s1.load();
+ * auto g2 = s2.load();
+ * const auto& [a, b] = make_guard_pack(std::move(g1), std::move(g2));
  * @endcode
  *
  * @tparam I Index of element to retrieve
