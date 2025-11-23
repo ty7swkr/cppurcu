@@ -1,4 +1,3 @@
-
 # cppurcu
 
 A simple implementation of the C++ RCU (read-copy-update) user-space library that combines thread-local caching with version tracking using only the C++17 standard library.
@@ -77,7 +76,7 @@ storage.update(new_data3);       // Update to version 3
   auto data = storage.load();    // Loads version 3
 }
 ```
-### Multiple Storages Snapshot
+### Multi-Storage Snapshot
 
 When you need to load (snapshot) multiple storages in a single line, you can use `guard_pack` as follows:
 ```cpp
@@ -88,15 +87,29 @@ auto storageA = cppurcu::create(...);
 auto storageB = cppurcu::create(...);
 auto storageC = cppurcu::create(...);
 
-// Load all at once - ensures same snapshot point
+// Load all at once – maintains the same snapshot point
 const auto &[a, b, c] = cppurcu::make_guard_pack(storageA, storageB, storageC);
 
-// All reads within this scope see consistent data
-// even if updates occur from other threads
+// All reads within this scope see consistent data,
+// even if updates occur from other threads.
 a->lookup(...);
 b->query(...);
 c->find(...);
 ```
+If you need a consistent snapshot within a specific scope, you can write code like this:
+```cpp
+#include <cppurcu/cppurcu.h>
+...........
+{
+  auto pack = cppurcp::make_guard_pack(storageA, storageB, storageC);
+  .....
+  // Even if storageA and storageC are used here, 
+  // the pack maintains a consistent snapshot of storageA, B, and C.
+  my_class.calculate(...);
+  .....
+}
+```
+
 **Note:**<br>
 - `guard_pack` loads a snapshot from each storage and keeps them alive within the same scope, but it does **not** provide global transactional atomicity across multiple storages.
 - Each storage is still versioned independently; `guard_pack` is an RAII helper for convenient multi-storage snapshot loading, not a cross-storage transaction mechanism.
