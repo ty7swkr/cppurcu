@@ -86,6 +86,9 @@ make_guard_pack(storage<Ts> &... storages)
  *
  * @example Usage with get<I>()
  * @code
+ * auto g1 = cppurcu::storage(...);
+ * auto g2 = cppurcu::storage(...);
+ *
  * auto pack = make_guard_pack(g1.load(), g2.load());
  *
  * pack.get<0>()->config_value;
@@ -156,14 +159,6 @@ public:
    *
    * @note The returned guard provides operator->() and operator*()
    *       for accessing the underlying data.
-   *
-   * @code
-   * auto g1 = int_storage.load();
-   * auto g2 = string_storage.load();
-   * auto pack = make_guard_pack(std::move(g1), std::move(g2));
-   * int val = *pack.get<0>();           // Dereference int
-   * size_t len = pack.get<1>()->size(); // Access string method
-   * @endcode
    */
   template<std::size_t I>
   auto &get() & noexcept
@@ -396,14 +391,6 @@ namespace cppurcu
 /**
  * @brief ADL-discoverable get() for structured binding (non-const)
  *
- * Enables structured binding syntax:
- * @code
- * auto g1 = s1.load();
- * auto g2 = s2.load();
- * auto g3 = s3.load();
- * auto& [a, b, c] = make_guard_pack(std::move(g1), std::move(g2), std::move(g3));
- * @endcode
- *
  * @tparam I Index of element to retrieve
  * @tparam Ts Types in the guard_pack
  * @param pack The guard_pack to access
@@ -417,14 +404,6 @@ auto &get(guard_pack<Ts...> &pack)
 
 /**
  * @brief ADL-discoverable get() for structured binding (const)
- *
- * Const version for use with const guard_pack references.
- *
- * @code
- * auto g1 = s1.load();
- * auto g2 = s2.load();
- * const auto& [a, b] = make_guard_pack(std::move(g1), std::move(g2));
- * @endcode
  *
  * @tparam I Index of element to retrieve
  * @tparam Ts Types in the guard_pack
