@@ -30,8 +30,6 @@ class guard_pack;
  * @return guard_pack containing guards for all storages
  *
  * @throws Any exception thrown by storage::load()
- *         If an exception occurs during load, the guards that have already been created
- *         are automatically destroyed via stack unwinding.
  *
  * @note This is equivalent to:
  *       make_guard_pack(storage1.load(), storage2.load(), ...)
