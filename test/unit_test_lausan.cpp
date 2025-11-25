@@ -64,7 +64,7 @@ void test_memory_leak_detection() {
 }
 
 // ============================================================================
-// TEST 2: nullptr handling (not detectable by TSan) — updated
+// TEST 2: nullptr handling (not detectable by TSan) - updated
 // ============================================================================
 
 void test_nullptr_handling() {

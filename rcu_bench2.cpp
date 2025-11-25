@@ -574,7 +574,6 @@ int main(int argc, char **argv)
 
   cout << "Test data generation completed (200 copies)\n";
 
-  // 반복 실행
   for (int run = 0; run < num_runs; ++run)
   {
     if (num_runs > 1)

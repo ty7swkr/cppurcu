@@ -218,7 +218,7 @@ private:
       constexpr std::size_t prev_end = offset<I - 1>() + sizeof(guard<PREV_T>);
 
       // Alignment requirement of current guard
-      constexpr std::size_t align   = alignof(guard<CURR_T>);
+      constexpr std::size_t align    = alignof(guard<CURR_T>);
 
       // Round up to next aligned address: (prev_end + align - 1) / align * align
       return (prev_end + align - 1) / align * align;

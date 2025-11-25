@@ -275,7 +275,7 @@ void test_memory_cleanup_pack()
   if (!weak3.expired()) alive++;
 
   // thread_local of main thread
-  assert(alive <= 3); // main thread의 thread_local
+  assert(alive <= 3); // main thread thread_local
 
   TEST_END()
 }

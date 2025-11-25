@@ -12,7 +12,7 @@
 using namespace std;
 using namespace cppurcu;
 
-// TEST 1: Thread explosion — create/destroy 1000 threads, repeated 10 times
+// TEST 1: Thread explosion - create/destroy 1000 threads, repeated 10 times
 void test_thread_explosion() {
   cout << "\n[TEST 1] Thread Explosion (1000 threads * 10 rounds)\n";
   auto data = make_shared<int>(0);
@@ -44,10 +44,10 @@ void test_thread_explosion() {
   }
   stop = true;
   writer.join();
-  cout << "  ✓ PASSED\n";
+  cout << "  * PASSED\n";
 }
 
-// TEST 2: Ultra-fast updates — hammer updates with no sleep
+// TEST 2: Ultra-fast updates - hammer updates with no sleep
 void test_rapid_updates() {
   cout << "\n[TEST 2] Rapid Updates (10 writers, NO sleep)\n";
   auto data = make_shared<int>(0);
@@ -82,10 +82,10 @@ void test_rapid_updates() {
   for (auto &t : writers) t.join();
   for (auto &t : readers) t.join();
   cout << "  Updates: " << total_updates << ", Reads: " << total_reads << "\n";
-  cout << "  ✓ PASSED\n";
+  cout << "  * PASSED\n";
 }
 
-// TEST 3: Large objects — repeatedly replace 10MB objects
+// TEST 3: Large objects - repeatedly replace 10MB objects
 struct HugeObject {
   vector<int> data;
   HugeObject(size_t s) : data(s, 42) {}
@@ -121,10 +121,10 @@ void test_huge_objects() {
   stop = true;
   writer.join();
   for (auto &t : readers) t.join();
-  cout << "  Updates: " << updates << "\n  ✓ PASSED\n";
+  cout << "  Updates: " << updates << "\n  * PASSED\n";
 }
 
-// TEST 4: Multiple storages — concurrently access 100 storage instances
+// TEST 4: Multiple storages - concurrently access 100 storage instances
 void test_multiple_storages() {
   cout << "\n[TEST 4] Multiple Storages (100 instances, 50 threads)\n";
   const int num_storages = 100;
@@ -155,10 +155,10 @@ void test_multiple_storages() {
   for (auto &t : threads) t.join();
   cout << "  Errors: " << errors << "\n";
   assert(errors == 0);
-  cout << "  ✓ PASSED\n";
+  cout << "  * PASSED\n";
 }
 
-// TEST 5: Reclaimer extreme — fast updates with background reclamation
+// TEST 5: Reclaimer extreme - fast updates with background reclamation
 void test_reclaimer_stress() {
   cout << "\n[TEST 5] Reclaimer Thread Stress (10 writers, 30 readers)\n";
   auto rt = make_shared<reclaimer_thread>();
@@ -194,10 +194,10 @@ void test_reclaimer_stress() {
   stop = true;
   for (auto &t : writers) t.join();
   for (auto &t : readers) t.join();
-  cout << "  Updates: " << updates << ", Reads: " << reads << "\n  ✓ PASSED\n";
+  cout << "  Updates: " << updates << ", Reads: " << reads << "\n  * PASSED\n";
 }
 
-// TEST 6: Deeply nested guards — 5-level nesting during concurrent updates
+// TEST 6: Deeply nested guards - 5-level nesting during concurrent updates
 void test_nested_guards_extreme() {
   cout << "\n[TEST 6] Nested Guards Extreme (5-level nesting)\n";
   using MapType = unordered_map<string, int>;
@@ -238,10 +238,10 @@ void test_nested_guards_extreme() {
   stop = true;
   writer.join();
   for (auto &t : readers) t.join();
-  cout << "  ✓ PASSED\n";
+  cout << "  * PASSED\n";
 }
 
-// TEST 7: Random workload — unpredictable mixed read/write pattern
+// TEST 7: Random workload - unpredictable mixed read/write pattern
 void test_random_workload() {
   cout << "\n[TEST 7] Random Workload (50 threads, random ops)\n";
   auto data = make_shared<vector<int>>(1000, 42);
@@ -272,7 +272,7 @@ void test_random_workload() {
   this_thread::sleep_for(chrono::seconds(5));
   stop = true;
   for (auto &t : threads) t.join();
-  cout << "  Operations: " << operations << "\n  ✓ PASSED\n";
+  cout << "  Operations: " << operations << "\n  * PASSED\n";
 }
 
 int main() {
