@@ -60,7 +60,7 @@ protected:
    *       thread_local inline combination causing TLS guard redefinition errors.
    *       Original: `static thread_local inline std::unordered_map<uint64_t, T> storage_;`
    */
-  static std::unordered_map<uint64_t, T> & storage_()
+  static std::unordered_map<uint64_t, T> &storage_()
   {
     static thread_local std::unordered_map<uint64_t, T> storage;
     return storage;
