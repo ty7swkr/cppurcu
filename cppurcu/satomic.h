@@ -37,7 +37,11 @@ public:
 
   void store(std::shared_ptr<T> ptr, std::memory_order m_order = std::memory_order_release) noexcept
   {
+#if defined(__cpp_lib_atomic_shared_ptr) || (__cplusplus >= 202002L)
+    ptr_.store(std::move(ptr), m_order);
+#else
     std::atomic_store_explicit(&ptr_, std::move(ptr), m_order);
+#endif
   }
 
   satomic &operator=(std::shared_ptr<T> ptr) noexcept
@@ -48,7 +52,11 @@ public:
 
   std::shared_ptr<T> load(std::memory_order m_order = std::memory_order_acquire) const noexcept
   {
+#if defined(__cpp_lib_atomic_shared_ptr) || (__cplusplus >= 202002L)
+    return ptr_.load(m_order);
+#else
     return std::atomic_load_explicit(&ptr_, m_order);
+#endif
   }
 
   void reset(std::memory_order m_order = std::memory_order_release) noexcept
@@ -57,7 +65,11 @@ public:
   }
 
 private:
+#if defined(__cpp_lib_atomic_shared_ptr) || (__cplusplus >= 202002L)
+  std::atomic<std::shared_ptr<T>> ptr_;
+#else
   std::shared_ptr<T> ptr_;
+#endif
 };
 
 }
