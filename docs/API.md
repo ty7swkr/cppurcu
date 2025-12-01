@@ -45,7 +45,7 @@ Creates a new storage with initial data.
 
 ## `cppurcu::guard<T>`
 
-RAII guard object returned by `storage<T>::load()`.
+RAII guard that provides snapshot isolation, returned by `storage<T>::load()`.
 
 ### Notes
 - Cannot be copied or moved. (thread-local only)
@@ -72,7 +72,7 @@ RAII guard object returned by `storage<T>::load()`.
 - Provides control over thread-local cache behavior
 
 **`void tls.schedule_release()`**
-- Schedules the TLS cache for release when this guard is destroyed
+- Schedules the TLS cache for release upon exiting the outermost scope
 
 **`void tls.retain()`**
 - Cancels the scheduled TLS cache release, keeping the cache alive
@@ -82,15 +82,31 @@ RAII guard object returned by `storage<T>::load()`.
 
 ### Example
 ```cpp
-auto guard = storage.load();
-if (guard) {
-  guard->method();  // Safe access via operator->
-}
-// Guard destroyed here, data may be updated by next load()
+{
+  auto guard = storage.load();
+  if (guard) {
+    guard->method();  // Safe access via operator->
+  }
+  // Guard destroyed here, but TLS cache data remains.
+  // Data may be updated by next load()
+} 
 
 // With TLS release control
-auto guard2 = storage.load_with_tls_release();
-guard2.tls.retain();  // Cancel the scheduled release
+{
+  auto guard1 = storage.load();
+  {
+    auto guard2 = storage.load_with_tls_release();
+    if (guard2)
+      guard2->method();
+
+    // TLS cache data is not destroyed immediately here,
+    // but scheduled to be destroyed upon exiting the outermost scope.
+  }
+
+  // TLS cache release scheduled by `load_with_tls_release()`
+  // but can be canceled via `guard<T>::tls.retain()`.
+  guard1.tls.retain();
+} // outermost
 ```
 
 ## `cppurcu::guard_pack<Ts...>`
