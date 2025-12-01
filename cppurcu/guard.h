@@ -19,6 +19,7 @@ struct tls_value_t
   uint64_t    version   = 0;
   const_t<T>  *ptr      = nullptr;  // Fast path
   uint64_t    ref_count = 0;
+  bool        to_release = false;
   std::shared_ptr<const_t<T>> value = nullptr;
 };
 
@@ -44,7 +45,16 @@ public:
     if (moved_ == true)
       return;
 
-    --tls_value_.ref_count;
+    if (--tls_value_.ref_count > 0)
+      return;
+
+    if (tls_value_.to_release == false)
+      return;
+
+    --tls_value_.version;
+    tls_value_.ptr = nullptr;
+    tls_value_.value.reset();
+    tls_value_.to_release = false;
   }
 
   // Pointer-like access
@@ -54,7 +64,17 @@ public:
   const_t<T> &operator* () const noexcept { return *(tls_value_.ptr); }
   explicit operator bool() const noexcept { return tls_value_.ptr != nullptr; }
 
-  uint64_t ref_count() const noexcept { return tls_value_.ref_count; }
+  uint64_t ref_count    () const noexcept { return tls_value_.ref_count; }
+
+  struct tls_t
+  {
+    explicit tls_t(bool &to_release) : to_release_(to_release) {}
+    void schedule_release () const noexcept { to_release_ = true; }
+    void retain           () const noexcept { to_release_ = false;}
+    bool release_scheduled() const noexcept { return to_release_; }
+  private:
+    bool &to_release_;
+  } tls;
 
 protected:
   friend class local<T>;
@@ -63,32 +83,37 @@ protected:
   friend class guard_pack;
 
   guard(tls_value_t<T> &tls_value, const source<T> &source)
-  : tls_value_(tls_value), source_(source)
+  : tls(tls_value.to_release), tls_value_(tls_value)
   {
     if (tls_value_.ref_count++ > 0)
       return;
 
     // in case tls_value_.ref_count == 0
-    if (auto [new_version, new_source] = source_.load(tls_value_.version); new_version != tls_value_.version)
+    if (auto [new_version, new_source] = source.load(tls_value_.version); new_version != tls_value_.version)
     {
-      // Raw pointer update only when version changes, Fast Path
+      // Raw pointer update only when version changes, Slow Path
       tls_value_.version = new_version;
       tls_value_.ptr     = new_source.get();
       tls_value_.value   = std::move(new_source);
     }
   }
 
+  guard(tls_value_t<T> &tls_value, const source<T> &source, bool to_release)
+  : guard(tls_value, source)
+  {
+    tls_value_.to_release = to_release;
+  }
+
   // private move constructor - only accessible by guard_pack
   guard(guard &&other) noexcept
-  : tls_value_(other.tls_value_), source_(other.source_)
+  : tls(other.tls_value_.to_release), tls_value_(other.tls_value_)
   {
     other.moved_ = true;
   }
 
 private:
   tls_value_t<T>  &tls_value_;
-  const source<T> &source_;
-  bool            moved_ = false;
+  bool            moved_  = false;
 };
 
 }

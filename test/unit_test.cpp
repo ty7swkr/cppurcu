@@ -706,6 +706,276 @@ void test_memory_cleanup()
 }
 
 // ============================================================================
+// Release cache Tests
+// ============================================================================
+
+void test_scheduled_release_basic()
+{
+  TEST_START("ScheduledReleaseBasic")
+
+  weak_ptr<int> weak_data;
+
+  {
+    auto data = make_shared<int>(42);
+    weak_data = data;
+
+    storage<int> store(std::move(data));
+
+    {
+      auto g = store.load_with_tls_release();  // release_cache = true
+      assert(*g == 42);
+      assert(g.tls.release_scheduled() == true);
+    }  // guard destroyed -> cache cleanup
+
+    // shared_ptr released as TLS cache is cleaned up
+    // Reference only source_.value_ of storage
+    assert(weak_data.use_count() == 1);
+  }
+
+  assert(weak_data.expired());
+
+  TEST_END()
+}
+
+void test_scheduled_release_false()
+{
+  TEST_START("ScheduledReleaseFalse")
+
+  weak_ptr<int> weak_data;
+
+  {
+    auto data = make_shared<int>(42);
+    weak_data = data;
+
+    storage<int> store(std::move(data));
+
+    {
+      auto g = store.load();  // release_cache = false (default)
+      assert(*g == 42);
+      assert(g.tls.release_scheduled() == false);
+    }  // guard destroyed -> cache retained
+
+    // Reference count 2 (source + TLS) as TLS cache is retained
+    assert(weak_data.use_count() == 2);
+  }
+
+  // May remain in main thread's TLS even after storage destruction
+  assert(weak_data.use_count() <= 1);
+
+  TEST_END()
+}
+
+void test_scheduled_release_setter()
+{
+  TEST_START("ScheduledReleaseSetter")
+
+  weak_ptr<int> weak_data;
+
+  {
+    auto data = make_shared<int>(42);
+    weak_data = data;
+
+    storage<int> store(std::move(data));
+
+    {
+      auto g = store.load();  // release_cache = false
+      assert(g.tls.release_scheduled() == false);
+
+      g.tls.schedule_release();
+      assert(g.tls.release_scheduled() == true);
+    }  // guard destroyed -> cache cleanup
+
+    assert(weak_data.use_count() == 1);
+  }
+
+  TEST_END()
+}
+
+void test_scheduled_release_cancel()
+{
+  TEST_START("ScheduledReleaseCancel")
+
+  weak_ptr<int> weak_data;
+
+  {
+    auto data = make_shared<int>(42);
+    weak_data = data;
+
+    storage<int> store(std::move(data));
+
+    {
+      auto g = store.load_with_tls_release();  // release_cache = true
+      assert(g.tls.release_scheduled() == true);
+
+      g.tls.retain();
+      assert(g.tls.release_scheduled() == false);
+    }  // guard destroyed -> cache retained
+
+    // Cache retained as it was canceled
+    assert(weak_data.use_count() == 2);
+  }
+
+  TEST_END()
+}
+
+void test_scheduled_release_nested_inner_true()
+{
+  TEST_START("ScheduledReleaseNestedInnerTrue")
+
+  weak_ptr<int> weak_data;
+
+  {
+    auto data = make_shared<int>(42);
+    weak_data = data;
+
+    storage<int> store(std::move(data));
+
+    {
+      auto g1 = store.load();       // release_cache = false
+      assert(g1.ref_count() == 1);
+
+      {
+        auto g2 = store.load_with_tls_release(); // set release_cache = true
+        assert(g2.ref_count() == 2);
+        assert(g2.tls.release_scheduled() == true);
+      }  // g2 destroyed, ref_count = 1
+
+      // ref_count > 0, cache not cleaned up as g1 is still alive
+      assert(weak_data.use_count() == 2);
+    }  // g1 destroyed, ref_count = 0, release_cache = true -> cache cleanup
+
+    assert(weak_data.use_count() == 1);
+  }
+
+  TEST_END()
+}
+
+void test_scheduled_release_nested_outer_true()
+{
+  TEST_START("ScheduledReleaseNestedOuterTrue")
+
+  weak_ptr<int> weak_data;
+
+  {
+    auto data = make_shared<int>(42);
+    weak_data = data;
+
+    storage<int> store(std::move(data));
+
+    {
+      auto g1 = store.load_with_tls_release();  // release_cache = true
+      assert(g1.ref_count() == 1);
+      assert(g1.tls.release_scheduled() == true);
+
+      {
+        auto g2 = store.load();  // inner load() should not overwrite
+        assert(g2.ref_count() == 2);
+        // g1 already set true, must remain true
+        assert(g2.tls.release_scheduled() == true);
+      }  // g2 destroyed, ref_count = 1
+
+      assert(g1.tls.release_scheduled() == true);
+      assert(weak_data.use_count() == 2);  // source + TLS
+    }  // g1 destroyed, ref_count = 0, release_cache = true -> cleanup
+
+    assert(weak_data.use_count() == 1);  // only source
+  }
+
+  assert(weak_data.expired());
+
+  TEST_END()
+}
+
+void test_scheduled_release_refetch()
+{
+  TEST_START("ScheduledReleaseRefetch")
+
+  storage<int> store(make_shared<int>(100));
+
+  // First load
+  {
+    auto g = store.load_with_tls_release();
+    assert(*g == 100);
+  }  // Cache cleaned up, version decremented
+
+  // update
+  store.update(make_shared<int>(200));
+
+  // Next load -> refetch due to version mismatch
+  {
+    auto g = store.load();
+    assert(*g == 200);  // New value
+  }
+
+  TEST_END()
+}
+
+void test_scheduled_release_version_decrement()
+{
+  TEST_START("ScheduledReleaseVersionDecrement")
+
+  storage<int> store(make_shared<int>(100));
+
+  // Cache initialization with first load
+  {
+    auto g = store.load();
+    assert(*g == 100);
+  }
+
+  // release_cache without update
+  {
+    auto g = store.load_with_tls_release();
+    assert(*g == 100);
+  }  // version--
+
+  // Load again -> refetch due to version mismatch (same value though)
+  {
+    auto g = store.load();
+    assert(*g == 100);  // Value is same
+  }
+
+  TEST_END()
+}
+
+void test_scheduled_release_multithread()
+{
+  TEST_START("ScheduledReleaseMultithread")
+
+  auto data = make_shared<int>(42);
+  storage<int> store(data);
+
+  atomic<bool> stop{false};
+  atomic<int> release_count{0};
+
+  vector<thread> threads;
+  for (int i = 0; i < 5; ++i)
+  {
+    threads.emplace_back([&]()
+    {
+      while (!stop.load())
+      {
+        {
+          auto g = store.load_with_tls_release();  // release_cache every time
+          assert(*g == 42);
+        }
+        release_count.fetch_add(1);
+        this_thread::sleep_for(chrono::milliseconds(10));
+      }
+    });
+  }
+
+  this_thread::sleep_for(chrono::milliseconds(200));
+  stop = true;
+
+  for (auto &t : threads)
+    t.join();
+
+  assert(release_count > 50);
+
+  TEST_END()
+}
+
+// ============================================================================
 // Reclaimer Thread Tests (modified for assertion in destructor)
 // ============================================================================
 
@@ -1039,6 +1309,17 @@ int main()
   cout << "\n--- Advanced Tests ---" << endl;
   test_multiple_storage_instances();
   test_memory_cleanup();
+
+  cout << "\n--- Scheduled Release Tests ---" << endl;
+  test_scheduled_release_basic();
+  test_scheduled_release_false();
+  test_scheduled_release_setter();
+  test_scheduled_release_cancel();
+  test_scheduled_release_nested_inner_true();
+  test_scheduled_release_nested_outer_true();
+  test_scheduled_release_refetch();
+  test_scheduled_release_version_decrement();
+  test_scheduled_release_multithread();
 
   cout << "\n--- reclaimer_thread Tests ---" << endl;
   cout << "Note: These tests verify that the reclaimer properly handles old objects" << endl;

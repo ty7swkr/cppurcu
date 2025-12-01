@@ -82,6 +82,31 @@ public:
     return local_.load();
   }
 
+  /**
+   * @brief Loads the current value with automatic TLS cache release.
+   *
+   * Similar to load(), but schedules the thread-local cache for release
+   * when the outermost guard in nested scopes is destroyed.
+   *
+   * When multiple guards are nested (ref_count > 1), the TLS cache is
+   * released only when the last remaining guard (ref_count == 0) goes
+   * out of scope, ensuring all nested reads complete before cleanup.
+   *
+   * @return A guard object with TLS release scheduled on destruction.
+   *
+   * @note Use this when you want to ensure TLS resources are released
+   *       promptly after read operations complete, preventing stale cache.
+   * @note To cancel the scheduled TLS release, call tls.retain() on
+   *       the returned guard object.
+   *
+   * @see guard::tls_t::retain()
+   * @see guard::tls_t::schedule_release()
+   */
+  guard<T> load_with_tls_release()
+  {
+    return local_.load_with_release();
+  }
+
 private:
   std::shared_ptr<reclaimer_thread> reclaimer_ = nullptr;
   source<T> source_;

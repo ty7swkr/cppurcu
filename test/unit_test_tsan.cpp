@@ -275,6 +275,132 @@ void test_random_workload() {
   cout << "  Operations: " << operations << "\n  * PASSED\n";
 }
 
+// TEST 8: scheduled_release with concurrent updates
+// Verifies no data race when scheduled_release=true during concurrent read/write
+void test_scheduled_release_concurrent() {
+  cout << "\n[TEST 8] Release Cache Concurrent (20 readers with scheduled_release)\n";
+  auto data = make_shared<int>(0);
+  storage<int> store(data);
+  atomic<bool> stop{false};
+  atomic<size_t> reads{0}, writes{0};
+
+  // Writer thread - continuous updates
+  thread writer([&]() {
+    int val = 1;
+    while (!stop) {
+      store.update(make_shared<int>(val++));
+      writes.fetch_add(1);
+      this_thread::sleep_for(chrono::microseconds(500));
+    }
+  });
+
+  // Reader threads - all use scheduled_release=true
+  vector<thread> readers;
+  for (int i = 0; i < 20; ++i) {
+    readers.emplace_back([&]() {
+      while (!stop) {
+        auto g = store.load_with_tls_release();  // scheduled_release enabled
+        assert(*g >= 0);
+        reads.fetch_add(1);
+      }
+    });
+  }
+
+  this_thread::sleep_for(chrono::seconds(3));
+  stop = true;
+  writer.join();
+  for (auto &t : readers) t.join();
+
+  cout << "  Writes: " << writes << ", Reads: " << reads << "\n  * PASSED\n";
+}
+
+// TEST 9: scheduled_release with nested guards under concurrent updates
+// Verifies snapshot isolation is maintained when inner guard sets scheduled_release
+void test_scheduled_release_nested_concurrent() {
+  cout << "\n[TEST 9] Release Cache Nested Concurrent (nested guards + updates)\n";
+  auto data = make_shared<int>(0);
+  storage<int> store(data);
+  atomic<bool> stop{false};
+  atomic<size_t> violations{0};
+
+  // Writer thread
+  thread writer([&]() {
+    int val = 1;
+    while (!stop) {
+      store.update(make_shared<int>(val++));
+      this_thread::sleep_for(chrono::milliseconds(5));
+    }
+  });
+
+  // Reader threads with nested guards
+  vector<thread> readers;
+  for (int i = 0; i < 10; ++i) {
+    readers.emplace_back([&]() {
+      while (!stop) {
+        auto g1 = store.load();        // outer guard, scheduled_release=false
+        int v1 = *g1;
+        {
+          auto g2 = store.load_with_tls_release();  // inner guard, scheduled_release=true
+          int v2 = *g2;
+          {
+            auto g3 = store.load();    // another nested guard
+            int v3 = *g3;
+            // All guards in same scope must see same version
+            if (v1 != v2 || v2 != v3) {
+              violations.fetch_add(1);
+            }
+          }
+        }
+      }
+    });
+  }
+
+  this_thread::sleep_for(chrono::seconds(3));
+  stop = true;
+  writer.join();
+  for (auto &t : readers) t.join();
+
+  cout << "  Violations: " << violations << "\n";
+  assert(violations == 0);
+  cout << "  * PASSED\n";
+}
+
+// TEST 10: scheduled_release toggle under contention
+// Verifies no race when dynamically toggling scheduled_release via setter
+void test_scheduled_release_toggle() {
+  cout << "\n[TEST 10] Release Cache Toggle (dynamic toggle under contention)\n";
+  auto data = make_shared<int>(42);
+  storage<int> store(data);
+  atomic<bool> stop{false};
+  atomic<size_t> operations{0};
+
+  vector<thread> threads;
+  for (int i = 0; i < 30; ++i) {
+    threads.emplace_back([&, tid = i]() {
+      while (!stop) {
+        {
+          auto g = tid % 2 == 0 ? store.load() : store.load_with_tls_release();  // half start with true
+          assert(*g == 42);
+
+          // Toggle scheduled_release mid-operation
+          if (g.tls.release_scheduled() == false)
+            (g.tls.schedule_release());
+          else
+            g.tls.retain();
+
+          operations.fetch_add(1);
+        }
+      }
+    });
+  }
+
+  this_thread::sleep_for(chrono::seconds(3));
+  stop = true;
+  for (auto &t : threads) t.join();
+
+  cout << "  Operations: " << operations << "\n  * PASSED\n";
+}
+
 int main() {
   try {
     test_thread_explosion();
@@ -284,6 +410,9 @@ int main() {
     test_reclaimer_stress();
     test_nested_guards_extreme();
     test_random_workload();
+    test_scheduled_release_concurrent();
+    test_scheduled_release_nested_concurrent();
+    test_scheduled_release_toggle();
     cout << "\n========================================\n";
     cout << "All tests passed!\n";
     cout << "========================================\n";
@@ -293,5 +422,3 @@ int main() {
   }
   return 0;
 }
-
-

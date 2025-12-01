@@ -27,16 +27,30 @@ public:
   guard<T> load()
   {
     auto &tls_value = tls_value_.ref();
-    if (tls_value.init == false)
-    {
-      auto [new_version, new_source] = source_.load();
-      tls_value.init    = true;
-      tls_value.version = new_version;
-      tls_value.ptr     = new_source.get();
-      tls_value.value   = std::move(new_source);
-    }
+    ensure_init(tls_value);
 
     return guard<T>(tls_value, source_);
+  }
+
+  guard<T> load_with_release()
+  {
+    auto &tls_value = tls_value_.ref();
+    ensure_init(tls_value);
+
+    return guard<T>(tls_value, source_, true);
+  }
+
+protected:
+  void ensure_init(tls_value_t<T> &tls_value)
+  {
+    if (tls_value.init == true)
+      return;
+
+    auto [new_version, new_source] = source_.load();
+    tls_value.init    = true;
+    tls_value.version = new_version;
+    tls_value.ptr     = new_source.get();
+    tls_value.value   = std::move(new_source);
   }
 
 protected:

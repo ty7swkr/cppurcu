@@ -433,6 +433,179 @@ void test_thread_local_cleanup_on_thread_exit() {
 }
 
 // ============================================================================
+// TEST 9: scheduled_release releases shared_ptr from TLS cache
+// ============================================================================
+
+void test_scheduled_release_memory_release() {
+  TEST_START("ScheduledReleaseMemoryRelease")
+
+  weak_ptr<int> weak_data;
+
+  {
+    auto data = make_shared<int>(42);
+    weak_data = data;
+
+    storage<int> store(std::move(data));
+
+    // First load - caches the shared_ptr in TLS
+    {
+      auto g = store.load();
+      assert(*g == 42);
+    }
+    // Without scheduled_release, TLS still holds reference
+    // source(1) + TLS cache(1) = 2
+    assert(weak_data.use_count() == 2);
+
+    // Load with scheduled_release
+    {
+      auto g = store.load_with_tls_release();
+      assert(*g == 42);
+    }
+    // After guard destruction with load_with_tls_release, TLS cache is cleared
+    // Only source holds reference now
+    assert(weak_data.use_count() == 1);
+  }
+
+  assert(weak_data.expired());
+
+  TEST_END()
+}
+
+// ============================================================================
+// TEST 10: scheduled_release in worker threads prevents memory accumulation
+// ============================================================================
+
+void test_scheduled_release_worker_thread_memory() {
+  TEST_START("ScheduledReleaseWorkerThreadMemory")
+
+  weak_ptr<int> weak_refs[10];
+  auto rt = make_shared<reclaimer_thread>(true);
+
+  {
+    storage<int> store(make_shared<int>(0), rt);
+
+    // Simulate intermittent worker threads that use load_with_tls_release
+    for (int i = 0; i < 10; ++i) {
+      auto new_val = make_shared<int>(i + 1);
+      weak_refs[i] = new_val;
+      store.update(new_val);
+
+      thread worker([&store]() {
+        // Intermittent worker uses scheduled_release=true
+        auto g = store.load_with_tls_release();
+        this_thread::sleep_for(chrono::milliseconds(10));
+      });
+      worker.join();
+
+      this_thread::sleep_for(chrono::milliseconds(50));
+    }
+  }
+
+  // Wait for reclaimer
+  this_thread::sleep_for(chrono::milliseconds(200));
+
+  // All old values should be released
+  int alive_count = 0;
+  for (int i = 0; i < 9; ++i) {  // exclude last one
+    if (!weak_refs[i].expired()) {
+      alive_count++;
+    }
+  }
+  assert(alive_count == 0);
+
+  TEST_END()
+}
+
+// ============================================================================
+// TEST 11: scheduled_release properly clears cache after multiple updates
+// ============================================================================
+
+void test_scheduled_release_after_updates() {
+  TEST_START("ScheduledReleaseAfterUpdates")
+
+  weak_ptr<int> weak_old, weak_new;
+
+  {
+    auto old_data = make_shared<int>(100);
+    weak_old = old_data;
+
+    storage<int> store(std::move(old_data));
+
+    // Initial load - caches old value
+    {
+      auto g = store.load();
+      assert(*g == 100);
+    }
+
+    // Update to new value
+    auto new_data = make_shared<int>(200);
+    weak_new = new_data;
+    store.update(std::move(new_data));
+
+    // Load without scheduled_release - TLS now caches new value
+    {
+      auto g = store.load();
+      assert(*g == 200);
+    }
+
+    // old_data should be released (only source held it, now updated)
+    // But main thread TLS might still hold it until load() refreshes
+    // After load(), old should be gone, new in TLS + source
+    assert(weak_new.use_count() == 2);  // source + TLS
+
+    // Load with scheduled_release - clears TLS cache
+    {
+      auto g = store.load_with_tls_release();
+      assert(*g == 200);
+    }
+
+    // After scheduled_release, only source holds new value
+    assert(weak_new.use_count() == 1);
+  }
+
+  assert(weak_old.expired());
+  assert(weak_new.expired());
+
+  TEST_END()
+}
+
+// ============================================================================
+// TEST 12: Nested guards with scheduled_release - memory behavior
+// ============================================================================
+
+void test_scheduled_release_nested_memory() {
+  TEST_START("ScheduledReleaseNestedMemory")
+
+  weak_ptr<int> weak_data;
+
+  {
+    auto data = make_shared<int>(42);
+    weak_data = data;
+
+    storage<int> store(std::move(data));
+
+    {
+      auto g1 = store.load();  // ref_count=1
+      assert(weak_data.use_count() == 2);  // source + TLS
+
+      {
+        auto g2 = store.load_with_tls_release();  // ref_count=2
+        assert(g2.ref_count() == 2);
+        assert(weak_data.use_count() == 2);  // still source + TLS
+      }
+      // g2 destroyed, ref_count=1, but release_scheduled won't trigger (ref_count > 0)
+      assert(weak_data.use_count() == 2);
+    }
+    // g1 destroyed, ref_count=0, release_scheduled -> cache cleared
+    assert(weak_data.use_count() == 1);  // only source
+  }
+
+  assert(weak_data.expired());
+
+  TEST_END()
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -446,6 +619,13 @@ int main() {
     test_concurrent_storage_destruction();
     test_without_reclaimer_memory();
     test_thread_local_cleanup_on_thread_exit();
+
+    cout << "\n--- scheduled_release Memory Tests ---" << endl;
+    test_scheduled_release_memory_release();
+    test_scheduled_release_worker_thread_memory();
+    test_scheduled_release_after_updates();
+    test_scheduled_release_nested_memory();
+
     cout << "\n========================================" << endl;
     cout << "All tests passed!" << endl;
     cout << "========================================" << endl;
