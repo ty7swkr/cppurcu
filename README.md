@@ -78,7 +78,7 @@ storage.update(new_data3);       // Update to version 3
 ```
 ### Multi-Storage Snapshot
 
-When you need to load (snapshot) multiple storages in a single line, you can use `guard_pack` as follows:
+When you need to load (snapshot) multiple storages in a single line, you can use `cppurcu::load(storage<Ts>&...)` as follows:
 ```cpp
 #include <cppurcu/cppurcu.h>
 
@@ -88,7 +88,7 @@ auto storageB = cppurcu::create(...);
 auto storageC = cppurcu::create(...);
 
 // Load all – maintains the same snapshot point
-const auto &[a, b, c] = cppurcu::make_guard_pack(storageA, storageB, storageC);
+const auto &[a, b, c] = cppurcu::load(storageA, storageB, storageC);
 
 // All reads within this scope see consistent data,
 // even if updates occur from other threads.
@@ -101,7 +101,7 @@ If you need a consistent snapshot within a specific scope, you can write code li
 #include <cppurcu/cppurcu.h>
 ...........
 {
-  auto pack = cppurcu::make_guard_pack(storageA, storageB, storageC);
+  auto pack = cppurcu::load(storageA, storageB, storageC);
   // or `guard<T>` object from storage<T>::load()
   auto pack = cppurcu::make_guard_pack(storageA.load(), storageB.load(), storageC.load());
   .....
