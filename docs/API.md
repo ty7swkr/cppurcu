@@ -127,7 +127,7 @@ An RAII helper that manages multiple guards as a single object
 
 ### Example
 ```cpp
-auto pack = cppurcu::make_guard_pack(storageA, storageB, storageC);
+auto pack = cppurcu::load(storageA, storageB, storageC);
 // or
 auto pack = cppurcu::make_guard_pack(storageA.load(), storageB.load(), storageC.load());
 
@@ -136,31 +136,45 @@ pack.get<1>()->method_b();
 pack.get<2>()->method_c();
 
 // Structured binding
-const auto& [a, b, c] = cppurcu::make_guard_pack(storageA, storageB, storageC);
+const auto& [a, b, c] = cppurcu::load(storageA, storageB, storageC);
 a->method_a();
 b->method_b();
 c->method_c();
 ```
 
-## `cppurcu::make_guard_pack`
+## `cppurcu::load`
 
 Factory function that creates a guard_pack from multiple storages.
 
 ### Signature
 ```cpp
 template<typename... Ts>
-guard_pack<Ts...> make_guard_pack(storage<Ts>&... storages);
+guard_pack<Ts...> load(storage<Ts>&... storages);
+```
 
+### Parameters
+- `storages`: References to storage instances to load from
+
+### Returns
+- `guard_pack` containing guards for all storages
+
+## `cppurcu::make_guard_pack`
+
+Factory function that creates a guard_pack from multiple guards.
+
+> **Deprecated**: `make_guard_pack(storage<Ts>&...)` is deprecated. Use `cppurcu::load(storage<Ts>&...)` instead.
+
+### Signature
+```cpp
 template<typename... Ts>
 guard_pack<Ts...> make_guard_pack(guard<Ts>&&... guards);
 ```
 
 ### Parameters
-- `storages`: References to storage instances to load from
 - `guards`: `guard<T>` instances to move into the pack
 
 ### Returns
-- `guard_pack` containing guards for all storages
+- `guard_pack` containing all guards
 
 ## `cppurcu::reclaimer_thread`
 

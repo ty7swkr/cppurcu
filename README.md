@@ -101,9 +101,9 @@ If you need a consistent snapshot within a specific scope, you can write code li
 #include <cppurcu/cppurcu.h>
 ...........
 {
-  auto pack = cppurcp::make_guard_pack(storageA, storageB, storageC);
+  auto pack = cppurcu::make_guard_pack(storageA, storageB, storageC);
   // or `guard<T>` object from storage<T>::load()
-  auto pack = cppurcp::make_guard_pack(storageA.load(), storageB.load(), storageC.load());
+  auto pack = cppurcu::make_guard_pack(storageA.load(), storageB.load(), storageC.load());
   .....
   // Even if storageA and storageC are used somewhere in the call chain 
   // within the calculate(...) function,

@@ -32,7 +32,7 @@ class guard_pack;
  * @throws Any exception thrown by storage::load()
  *
  * @note This is equivalent to:
- *       make_guard_pack(storage1.load(), storage2.load(), ...)
+ *       load(storage1.load(), storage2.load(), ...)
  *       Guards are loaded left-to-right.
  *
  * @example Structured binding (C++17)
@@ -42,7 +42,7 @@ class guard_pack;
  *
  * // Must use 'const auto&' - guard_pack is non-copyable/non-movable
  * // In C++17, structured binding's const reference return is a method with guaranteed safety defined in the specification
- * const auto &[config, cache] = make_guard_pack(g1, g2);
+ * const auto &[config, cache] = cppurcu::load(g1, g2);
  *
  * config->config_value;
  * cache->cache_value;
@@ -53,14 +53,21 @@ class guard_pack;
  * storage<Config> config_storage(config_data);
  * storage<Cache>  cache_storage(cache_data);
  *
- * auto pack = make_guard_pack(config_storage, cache_storage);
+ * auto pack = cppurcu::load(config_storage, cache_storage);
  * pack.get<0>()->config_value;
  * pack.get<1>()->cache_value;
  * @endcode
  */
 template<typename... Ts>
 guard_pack<Ts...>
-make_guard_pack(storage<Ts> &... storages)
+load(storage<Ts> &... storages)
+{
+  return make_guard_pack(storages.load()...);
+}
+
+template<typename... Ts>
+[[deprecated("Use cppurcu::load() instead")]]
+auto make_guard_pack(storage<Ts> &... storages)
 {
   return make_guard_pack(storages.load()...);
 }

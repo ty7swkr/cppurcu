@@ -57,7 +57,7 @@ void test_guard_pack_basic()
   storage<Config> config_storage(config_data);
   storage<Cache> cache_storage(cache_data);
 
-  auto pack = make_guard_pack(config_storage, cache_storage);
+  auto pack = load(config_storage, cache_storage);
 
   // get<I>() access
   assert(pack.get<0>()->version == 1);
@@ -78,7 +78,7 @@ void test_guard_pack_single()
   auto data = make_shared<int>(42);
   storage<int> store(data);
 
-  auto pack = make_guard_pack(store);
+  auto pack = load(store);
 
   assert(*pack.get<0>() == 42);
   static_assert(decltype(pack)::size() == 1, "Size should be 1");
@@ -98,7 +98,7 @@ void test_guard_pack_three_types()
   storage<Cache> cache_storage(cache_data);
   storage<State> state_storage(state_data);
 
-  auto pack = make_guard_pack(config_storage, cache_storage, state_storage);
+  auto pack = load(config_storage, cache_storage, state_storage);
 
   assert(pack.get<0>()->version == 2);
   assert(pack.get<1>()->hits == 500);
@@ -127,9 +127,9 @@ void test_structured_binding()
   storage<State> state_storage(state_data);
 
   // Structured binding with const auto&
-  const auto& [config, cache, state] = make_guard_pack(config_storage,
-                                                        cache_storage,
-                                                        state_storage);
+  const auto& [config, cache, state] = load(config_storage,
+                                            cache_storage,
+                                            state_storage);
 
   assert(config->version == 1);
   assert(config->name == "binding_test");
@@ -151,7 +151,7 @@ void test_structured_binding_two()
   storage<int> int_storage(int_data);
   storage<string> str_storage(str_data);
 
-  const auto& [num, str] = make_guard_pack(int_storage, str_storage);
+  const auto& [num, str] = load(int_storage, str_storage);
 
   assert(*num == 100);
   assert(*str == "hello");
@@ -174,7 +174,7 @@ void test_snapshot_isolation()
   storage<Cache> cache_storage(cache_data);
 
   {
-    auto pack = make_guard_pack(config_storage, cache_storage);
+    auto pack = load(config_storage, cache_storage);
 
     // Update after creating pack
     config_storage.update(make_shared<Config>(2, "v2"));
@@ -211,7 +211,7 @@ void test_snapshot_isolation_with_individual_guards()
     // Mix individual guard and guard_pack
     auto g1 = store1.load();
 
-    auto pack = make_guard_pack(store1, store2);
+    auto pack = load(store1, store2);
 
     // Update
     store1.update(make_shared<int>(101));
@@ -250,7 +250,7 @@ void test_memory_cleanup_pack()
     storage<int> store3(data3);
 
     {
-      auto pack = make_guard_pack(store1, store2, store3);
+      auto pack = load(store1, store2, store3);
 
       assert(*pack.get<0>() == 1);
       assert(*pack.get<1>() == 2);
@@ -295,7 +295,7 @@ void test_guard_pack_with_reclaimer()
     storage<string> store2(data2, rt);
 
     {
-      auto pack = make_guard_pack(store1, store2);
+      auto pack = load(store1, store2);
 
       assert(*pack.get<0>() == 100);
       assert(*pack.get<1>() == "hello");
@@ -310,7 +310,7 @@ void test_guard_pack_with_reclaimer()
     }
 
     // New pack sees updated values
-    auto pack2 = make_guard_pack(store1, store2);
+    auto pack2 = load(store1, store2);
     assert(*pack2.get<0>() == 200);
     assert(*pack2.get<1>() == "world");
 
@@ -336,7 +336,7 @@ void test_same_storage_multiple_times()
   storage<int> store(data);
 
   // Use same storage multiple times
-  auto pack = make_guard_pack(store, store, store);
+  auto pack = load(store, store, store);
 
   assert(*pack.get<0>() == 42);
   assert(*pack.get<1>() == 42);
@@ -360,10 +360,10 @@ void test_nested_guard_pack()
   storage<int> store2(data2);
 
   {
-    auto pack1 = make_guard_pack(store1, store2);
+    auto pack1 = load(store1, store2);
 
     {
-      auto pack2 = make_guard_pack(store1, store2);
+      auto pack2 = load(store1, store2);
 
       store1.update(make_shared<int>(10));
       store2.update(make_shared<int>(20));
@@ -396,7 +396,7 @@ void test_guard_pack_ref_count()
     assert(g1.ref_count() == 1);
 
     {
-      auto pack = make_guard_pack(store);
+      auto pack = load(store);
       // Guard inside pack increases ref_count
       assert(pack.get<0>().ref_count() == 2);
       assert(g1.ref_count() == 2);
@@ -423,7 +423,7 @@ void test_adl_get()
   storage<int> store1(data1);
   storage<string> store2(data2);
 
-  auto pack = make_guard_pack(store1, store2);
+  auto pack = load(store1, store2);
 
   // Call get via ADL
   auto& g0 = get<0>(pack);
