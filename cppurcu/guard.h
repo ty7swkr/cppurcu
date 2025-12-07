@@ -13,7 +13,7 @@ namespace cppurcu
 {
 
 template<typename T>
-struct tls_value_t
+struct alignas(64) tls_value_t
 {
   bool        init      = false;
   uint64_t    version   = 0;
