@@ -1,6 +1,6 @@
 # cppurcu
 
-A simple implementation of the C++ RCU (read-copy-update) user-space library that combines thread-local caching with version tracking using only the C++17 standard library.
+A simple implementation of the C++ RCU (read-copy-update) user-space library with RAII-based snapshot isolation, header-only and dependency-free, using only the C++17 standard library.
 <br>
 <br>
 
