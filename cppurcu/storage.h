@@ -75,8 +75,8 @@ public:
   }
 
   // Return and use the guard object as if it were a load() function.
-  // Using it directly without return (ex. storage::load()->value)
-  // can be dangerous because it does not isolate snapshots.
+  // Using it directly without return (e.g., storage::load()->value)
+  // does not provide snapshot isolation.
   guard<T> load()
   {
     return local_.load();
