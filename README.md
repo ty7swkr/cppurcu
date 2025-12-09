@@ -12,6 +12,10 @@ A simple implementation of the C++ RCU (read-copy-update) user-space library wit
 (guard_pack loads multiple storages in a single line.)
 - **No Data Duplication**: Data is not deep-copied per thread
 - **Optional Background Destruction**: reclaimer_thread can offload object destruction to a separate thread, reducing burden on reader threads
+
+## Performance
+For benchmark results, see [PERFORMANCE.md](docs/PERFORMANCE.md).
+<br>
 <br>
 
 ## API Overview
