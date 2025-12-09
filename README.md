@@ -18,8 +18,8 @@ For benchmark results, see [PERFORMANCE.md](docs/PERFORMANCE.md).
 <br>
 <br>
 
-## API Overview
-
+## Quick Start
+### API Overview
 No reader registration, grace period management, or memory barriers required.<br>
 ```cpp
 storage = new_storage;      // Update example (std::shared_ptr<T> new_storage)
@@ -31,10 +31,6 @@ The `std::shared_ptr` reference to the old object is released upon the first `lo
 Therefore, memory is reclaimed when all references to all `std::shared_ptr` instances are released.*<br>
 
 *Note2: Consequently, update calls are deadlock-free regardless of their location.*
-<br>
-<br>
-
-## Quick Start
 
 ### Basic Usage
 ```cpp
@@ -148,6 +144,17 @@ auto data = storage1.load();
 - Currently, the reader no longer uses the `reclaimer_thread` (or its mutex); the `reclaimer_thread` is only used by `storage<T>::update()`.
 <br>
 
+## API Reference
+
+For detailed API documentation, see [API.md](docs/API.md).
+
+Quick reference:
+- `cppurcu::storage<T>` - Main RCU-protected data storage
+- `cppurcu::guard<T>` - RAII guard for snapshot isolation
+- `cppurcu::guard_pack<Ts...>` - Multi-storage snapshot helper
+- `cppurcu::reclaimer_thread` - Background destruction handler
+<br>
+
 ## Installation
 
 cppurcu is a header-only library. Copy the cppurcu/ directory to your include path:
@@ -185,17 +192,6 @@ make liburcu
 - `make` - Builds tests with cppurcu and mutex (default)
 - `make liburcu` - Builds tests including liburcu comparison
 - `make clean` - Removes build artifacts
-<br>
-
-## API Reference
-
-For detailed API documentation, see [API.md](docs/API.md).
-
-Quick reference:
-- `cppurcu::storage<T>` - Main RCU-protected data storage
-- `cppurcu::guard<T>` - RAII guard for snapshot isolation
-- `cppurcu::guard_pack<Ts...>` - Multi-storage snapshot helper
-- `cppurcu::reclaimer_thread` - Background destruction handler
 <br>
 
 ## How It Works
