@@ -102,7 +102,7 @@ auto make_guard_pack(storage<Ts> &... storages)
  */
 template<typename... Ts>
 guard_pack<Ts...>
-make_guard_pack(guard<Ts> &&... guards);
+make_guard_pack(guard<Ts> &&... guards) noexcept;
 
 template<typename... Ts>
 guard_pack<Ts...> make_guard_pack(guard<Ts> &... guards) = delete;
@@ -128,12 +128,8 @@ public:
    * in the internal byte array using placement new.
    *
    * @param guards Guard instances to move
-   *
-   * @throws Any exception thrown by guard move constructor.
-   *         If an exception occurs, already constructed guards are destroyed
-   *         in reverse order before re-throwing.
    */
-  guard_pack(guard<Ts> &&... guards)
+  guard_pack(guard<Ts> &&... guards) noexcept
   {
     construct_guards<0>(std::move(guards)...);
   }
@@ -281,14 +277,10 @@ private:
    * @param g Current guard to move
    * @param rest Remaining guards to move
    *
-   * @throws Any exception from guard move constructor.
-   *         On exception, destroys the guard at index I before re-throwing.
-   *
-   * @note Uses move construction from the passed guard.
-   *       guard<T> has a private move constructor accessible via friend.
+   * @note guard move constructor is noexcept, so no exception handling needed.
    */
   template<std::size_t I, typename U, typename... Us>
-  void construct_guards(guard<U> &&g, guard<Us> &&... rest)
+  void construct_guards(guard<U> &&g, guard<Us> &&... rest) noexcept
   {
     void *ptr = &storage_[offset<I>()];
     new (ptr) guard<U>(std::move(g));
@@ -340,7 +332,7 @@ private:
  */
 template<typename... Ts>
 guard_pack<Ts...>
-make_guard_pack(guard<Ts> &&... guards)
+make_guard_pack(guard<Ts> &&... guards) noexcept
 {
   return guard_pack<Ts...>(std::move(guards)...);
 }
@@ -402,7 +394,7 @@ namespace cppurcu
  * @return Reference to guard at index I
  */
 template<std::size_t I, typename... Ts>
-auto &get(guard_pack<Ts...> &pack)
+auto &get(guard_pack<Ts...> &pack) noexcept
 {
   return pack.template get<I>();
 }
@@ -416,7 +408,7 @@ auto &get(guard_pack<Ts...> &pack)
  * @return Const reference to guard at index I
  */
 template<std::size_t I, typename... Ts>
-const auto &get(const guard_pack<Ts...> &pack)
+const auto &get(const guard_pack<Ts...> &pack) noexcept
 {
   return pack.template get<I>();
 }

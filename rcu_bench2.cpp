@@ -12,6 +12,7 @@
 
 #include <urcu.h>
 #include <urcu/rculist.h>
+#include <urcu-call-rcu.h>
 
 using namespace std;
 using namespace chrono;
@@ -83,7 +84,6 @@ void benchmark_mutex(
   atomic<size_t> total_reads{0};
   atomic<size_t> total_writes{0};
 
-  // Reader threads
   vector<thread> readers;
   for (size_t i = 0; i < num_readers; ++i)
   {
@@ -110,7 +110,6 @@ void benchmark_mutex(
     });
   }
 
-  // Writer threads
   vector<thread> writers;
   for (size_t i = 0; i < num_writers; ++i)
   {
@@ -199,7 +198,6 @@ void benchmark_cppurcu(
   atomic<size_t> total_reads{0};
   atomic<size_t> total_writes{0};
 
-  // Reader threads
   vector<thread> readers;
   for (size_t i = 0; i < num_readers; ++i)
   {
@@ -226,7 +224,6 @@ void benchmark_cppurcu(
     });
   }
 
-  // Writer threads
   vector<thread> writers;
   for (size_t i = 0; i < num_writers; ++i)
   {
@@ -269,20 +266,23 @@ void benchmark_cppurcu(
 }
 
 // ============================================================================
-// liburcu
+// liburcu with synchronize_rcu (sync)
 // ============================================================================
-class LiburcuContainer
+
+class LiburcuSyncContainer
 {
 public:
-  LiburcuContainer()
+  LiburcuSyncContainer()
   {
     auto *m = new unordered_map<string, string>();
     rcu_assign_pointer(ptr_, m);
   }
 
-  ~LiburcuContainer()
+  ~LiburcuSyncContainer()
   {
     synchronize_rcu();
+    auto *m = ptr_;
+    if (m) delete m;
   }
 
   bool contains(const string &ip)
@@ -296,15 +296,20 @@ public:
 
   void update(shared_ptr<unordered_map<string, string>> new_ips_sp)
   {
-    rcu_assign_pointer(ptr_, new_ips_sp.get());
+    auto *new_map = new unordered_map<string, string>(*new_ips_sp);
+    auto *old = rcu_xchg_pointer(&ptr_, new_map);
+
     synchronize_rcu();
+
+    if (old != nullptr)
+      delete old;
   }
 
 private:
   unordered_map<string, string> *ptr_{nullptr};
 };
 
-void benchmark_liburcu(
+void benchmark_liburcu_sync(
     size_t num_readers,
     size_t num_writers,
     chrono::seconds test_duration,
@@ -312,7 +317,7 @@ void benchmark_liburcu(
     const vector<pair<string, string>> &test_ips)
 {
   cout << "\n========================================\n";
-  cout << "liburcu\n";
+  cout << "liburcu (synchronize_rcu - sync)\n";
   cout << "========================================\n";
   cout << "Reader thread  : " << num_readers << "\n";
   cout << "Writer thread  : " << num_writers << "\n";
@@ -320,7 +325,7 @@ void benchmark_liburcu(
 
   rcu_init();
 
-  LiburcuContainer container;
+  LiburcuSyncContainer container;
   container.update(test_data_array[0]);
 
   atomic<bool> stop_flag{false};
@@ -328,7 +333,6 @@ void benchmark_liburcu(
   atomic<size_t> total_reads{0};
   atomic<size_t> total_writes{0};
 
-  // Reader threads
   vector<thread> readers;
   readers.reserve(num_readers);
   for (size_t i = 0; i < num_readers; ++i)
@@ -360,7 +364,166 @@ void benchmark_liburcu(
     });
   }
 
-  // Writer threads
+  vector<thread> writers;
+  writers.reserve(num_writers);
+  for (size_t i = 0; i < num_writers; ++i)
+  {
+    writers.emplace_back([&, i]()
+    {
+      rcu_register_thread();
+
+      size_t index = 0;
+
+      while (!start_flag.load(memory_order_acquire))
+        this_thread::yield();
+
+      while (!stop_flag.load(memory_order_relaxed))
+      {
+        container.update(test_data_array[index++]);
+        total_writes.fetch_add(1, memory_order_relaxed);
+        this_thread::sleep_for(chrono::milliseconds(100));
+      }
+
+      rcu_unregister_thread();
+    });
+  }
+
+  this_thread::sleep_for(chrono::milliseconds(100));
+  start_flag.store(true, memory_order_release);
+  auto start = chrono::high_resolution_clock::now();
+
+  this_thread::sleep_for(test_duration);
+  stop_flag.store(true, memory_order_relaxed);
+
+  for (auto &t : readers)
+    t.join();
+  for (auto &t : writers)
+    t.join();
+
+  auto end = chrono::high_resolution_clock::now();
+  auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+
+  cout << "execution duration : " << duration.count() << " ms\n";
+  cout << "total read  count  : " << total_reads << "\n";
+  cout << "total write count  : " << total_writes << "\n";
+  cout << "read throughput    : " << (total_reads * 1000.0 / duration.count()) << " ops/sec\n";
+  cout << "read per second    : " << (total_reads / test_duration.count()) << " reads/sec\n";
+}
+
+// ============================================================================
+// liburcu with call_rcu (async)
+// ============================================================================
+
+struct RcuMapWrapper
+{
+  struct rcu_head rcu;
+  unordered_map<string, string> *map;
+};
+
+static void free_map_callback(struct rcu_head *head)
+{
+  RcuMapWrapper *wrapper = caa_container_of(head, RcuMapWrapper, rcu);
+  delete wrapper->map;
+  delete wrapper;
+}
+
+class LiburcuContainer
+{
+public:
+  LiburcuContainer()
+  {
+    auto *m = new unordered_map<string, string>();
+    rcu_assign_pointer(ptr_, m);
+  }
+
+  ~LiburcuContainer()
+  {
+    synchronize_rcu();
+    auto *m = ptr_;
+    if (m) delete m;
+  }
+
+  bool contains(const string &ip)
+  {
+    rcu_read_lock();
+    auto *m = rcu_dereference(ptr_);
+    bool ok = (m->count(ip) > 0);
+    rcu_read_unlock();
+    return ok;
+  }
+
+  void update(shared_ptr<unordered_map<string, string>> new_ips_sp)
+  {
+    auto *new_map = new unordered_map<string, string>(*new_ips_sp);
+    auto *old = rcu_xchg_pointer(&ptr_, new_map);
+
+    if (old != nullptr)
+    {
+      auto *wrapper = new RcuMapWrapper();
+      wrapper->map = old;
+      call_rcu(&wrapper->rcu, free_map_callback);
+    }
+  }
+
+private:
+  unordered_map<string, string> *ptr_{nullptr};
+};
+
+void benchmark_liburcu(
+    size_t num_readers,
+    size_t num_writers,
+    chrono::seconds test_duration,
+    const vector<shared_ptr<unordered_map<string, string>>> &test_data_array,
+    const vector<pair<string, string>> &test_ips)
+{
+  cout << "\n========================================\n";
+  cout << "liburcu (call_rcu - async)\n";
+  cout << "========================================\n";
+  cout << "Reader thread  : " << num_readers << "\n";
+  cout << "Writer thread  : " << num_writers << "\n";
+  cout << "test duration  : " << test_duration.count() << " sec\n";
+
+  rcu_init();
+
+  LiburcuContainer container;
+  container.update(test_data_array[0]);
+
+  atomic<bool> stop_flag{false};
+  atomic<bool> start_flag{false};
+  atomic<size_t> total_reads{0};
+  atomic<size_t> total_writes{0};
+
+  vector<thread> readers;
+  readers.reserve(num_readers);
+  for (size_t i = 0; i < num_readers; ++i)
+  {
+    readers.emplace_back([&, i]()
+    {
+      rcu_register_thread();
+
+      mt19937 gen(12345 + i);
+      uniform_int_distribution<size_t> dist(0, test_ips.size() - 1);
+
+      for (int w = 0; w < 1000; ++w)
+      {
+        const auto &[ip, value] = test_ips[dist(gen)];
+        container.contains(ip);
+      }
+
+      while (!start_flag.load(memory_order_acquire))
+        this_thread::yield();
+
+      while (!stop_flag.load(memory_order_relaxed))
+      {
+        const auto &[ip, value] = test_ips[dist(gen)];
+        container.contains(ip);
+        total_reads.fetch_add(1, memory_order_relaxed);
+      }
+
+      rcu_unregister_thread();
+    });
+  }
+
   vector<thread> writers;
   writers.reserve(num_writers);
   for (size_t i = 0; i < num_writers; ++i)
@@ -544,7 +707,6 @@ int main(int argc, char **argv)
   if (argc >= 3)
     num_runs = atoi(argv[2]);
 
-  // Test parameters
   size_t num_readers = 10;
   size_t num_writers = 2;
   seconds test_duration(10);
@@ -557,7 +719,6 @@ int main(int argc, char **argv)
   cout << "- Update period  : 100 ms\n";
   cout << "- Number of runs : " << num_runs << "\n";
 
-  // Pre-generate test data
   cout << "generating test data...\n";
   auto test_ips = generate_test_ips(gen_size);
 
@@ -587,6 +748,9 @@ int main(int argc, char **argv)
 
     flush_cache();
     benchmark_cppurcu(num_readers, num_writers, test_duration, test_data_array, test_ips);
+
+    flush_cache();
+    benchmark_liburcu_sync(num_readers, num_writers, test_duration, test_data_array, test_ips);
 
     flush_cache();
     benchmark_liburcu(num_readers, num_writers, test_duration, test_data_array, test_ips);
