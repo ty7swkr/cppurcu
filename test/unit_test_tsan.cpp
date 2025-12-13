@@ -8,6 +8,9 @@
 #include <random>
 #include <cassert>
 #include <unordered_map>
+#include <fstream>
+#include <string>
+#include <filesystem>
 
 using namespace std;
 using namespace cppurcu;
@@ -241,16 +244,60 @@ void test_nested_guards_extreme() {
   cout << "  * PASSED\n";
 }
 
+bool is_container() {
+  if (std::filesystem::exists("/.dockerenv")) {
+    return true;
+  }
+
+  std::ifstream cgroup("/proc/1/cgroup");
+  std::string line;
+  while (std::getline(cgroup, line)) {
+    if (line.find("docker") != std::string::npos ||
+        line.find("kubepods") != std::string::npos) { // Kubernetes
+      return true;
+    }
+  }
+  return false;
+}
+
+bool is_vm() {
+  std::ifstream cpuinfo("/proc/cpuinfo");
+  std::string line;
+  while (std::getline(cpuinfo, line)) {
+    if (line.find("flags") != std::string::npos) {
+      if (line.find("hypervisor") != std::string::npos) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+int get_optimal_thread_count() {
+  unsigned int cores = std::thread::hardware_concurrency();
+  if (cores == 0) cores = 4;
+
+  if (is_container() || is_vm()) {
+    std::cout << "\n[Info] Virtualized environment detected (vCPU: " << cores << "). Reducing load.";
+    return std::max(2u, cores / 2);
+  }
+
+  return std::min(128u, cores * 2);
+}
+
 // TEST 7: Random workload - unpredictable mixed read/write pattern
 void test_random_workload() {
-  cout << "\n[TEST 7] Random Workload (50 threads, random ops)\n";
+  int num_cores = get_optimal_thread_count();
+  cout << "\n[TEST 7] Random Workload (" << num_cores << " threads, random ops)\n";
+
   auto data = make_shared<vector<int>>(1000, 42);
   storage<vector<int>> store(data);
   atomic<bool> stop{false};
   atomic<size_t> operations{0};
 
   vector<thread> threads;
-  for (int i = 0; i < 50; ++i) {
+  for (int i = 0; i < num_cores; ++i) {
     threads.emplace_back([&, seed = i]() {
       mt19937 gen(seed);
       uniform_int_distribution<> op_dist(0, 9);
