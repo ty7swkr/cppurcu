@@ -115,14 +115,15 @@ void benchmark_mutex(
   {
     writers.emplace_back([&, i]()
     {
-      size_t index = 0;
+      size_t index = i;
 
       while (!start_flag.load(memory_order_acquire))
         this_thread::yield();
 
       while (!stop_flag.load(memory_order_relaxed))
       {
-        container.update(test_data_array[index++]);
+        container.update(test_data_array[index]);
+        index += num_writers;
         total_writes.fetch_add(1, memory_order_relaxed);
         this_thread::sleep_for(milliseconds(100));
       }
@@ -229,14 +230,15 @@ void benchmark_cppurcu(
   {
     writers.emplace_back([&, i]()
     {
-      size_t index = 0;
+      size_t index = i;
 
       while (!start_flag.load(memory_order_acquire))
         this_thread::yield();
 
       while (!stop_flag.load(memory_order_relaxed))
       {
-        container.update(test_data_array[index++]);
+        container.update(test_data_array[index]);
+        index += num_writers;
         total_writes.fetch_add(1, memory_order_relaxed);
         this_thread::sleep_for(milliseconds(100));
       }
@@ -269,20 +271,17 @@ void benchmark_cppurcu(
 // liburcu with synchronize_rcu (sync)
 // ============================================================================
 
-class LiburcuSyncContainer
+class LiburcuContainerSync
 {
 public:
-  LiburcuSyncContainer()
+  LiburcuContainerSync()
   {
-    auto *m = new unordered_map<string, string>();
-    rcu_assign_pointer(ptr_, m);
+    rcu_assign_pointer(ptr_, &data_);
   }
 
-  ~LiburcuSyncContainer()
+  ~LiburcuContainerSync()
   {
     synchronize_rcu();
-    auto *m = ptr_;
-    if (m) delete m;
   }
 
   bool contains(const string &ip)
@@ -294,18 +293,14 @@ public:
     return ok;
   }
 
-  void update(shared_ptr<unordered_map<string, string>> new_ips_sp)
+  void update(unordered_map<string, string> *new_ips_sp)
   {
-    auto *new_map = new unordered_map<string, string>(*new_ips_sp);
-    auto *old = rcu_xchg_pointer(&ptr_, new_map);
-
+    rcu_xchg_pointer(&ptr_, new_ips_sp);
     synchronize_rcu();
-
-    if (old != nullptr)
-      delete old;
   }
 
 private:
+  unordered_map<string, string> data_;
   unordered_map<string, string> *ptr_{nullptr};
 };
 
@@ -325,8 +320,8 @@ void benchmark_liburcu_sync(
 
   rcu_init();
 
-  LiburcuSyncContainer container;
-  container.update(test_data_array[0]);
+  LiburcuContainerSync container;
+  container.update(test_data_array[0].get());
 
   atomic<bool> stop_flag{false};
   atomic<bool> start_flag{false};
@@ -370,21 +365,18 @@ void benchmark_liburcu_sync(
   {
     writers.emplace_back([&, i]()
     {
-      rcu_register_thread();
-
-      size_t index = 0;
+      size_t index = i;
 
       while (!start_flag.load(memory_order_acquire))
         this_thread::yield();
 
       while (!stop_flag.load(memory_order_relaxed))
       {
-        container.update(test_data_array[index++]);
+        container.update(test_data_array[index].get());
+        index += num_writers;
         total_writes.fetch_add(1, memory_order_relaxed);
         this_thread::sleep_for(chrono::milliseconds(100));
       }
-
-      rcu_unregister_thread();
     });
   }
 
@@ -422,25 +414,20 @@ struct RcuMapWrapper
 
 static void free_map_callback(struct rcu_head *head)
 {
-  RcuMapWrapper *wrapper = caa_container_of(head, RcuMapWrapper, rcu);
-  delete wrapper->map;
-  delete wrapper;
+  caa_container_of(head, RcuMapWrapper, rcu);
 }
 
-class LiburcuContainer
+class LiburcuContainerAsync
 {
 public:
-  LiburcuContainer()
+  LiburcuContainerAsync()
   {
-    auto *m = new unordered_map<string, string>();
-    rcu_assign_pointer(ptr_, m);
+    rcu_assign_pointer(ptr_, &data_);
   }
 
-  ~LiburcuContainer()
+  ~LiburcuContainerAsync()
   {
-    synchronize_rcu();
-    auto *m = ptr_;
-    if (m) delete m;
+    rcu_barrier();
   }
 
   bool contains(const string &ip)
@@ -452,24 +439,23 @@ public:
     return ok;
   }
 
-  void update(shared_ptr<unordered_map<string, string>> new_ips_sp)
+  void update(unordered_map<string, string> *new_ips_sp, RcuMapWrapper *wrapper)
   {
-    auto *new_map = new unordered_map<string, string>(*new_ips_sp);
-    auto *old = rcu_xchg_pointer(&ptr_, new_map);
+    auto *old = rcu_xchg_pointer(&ptr_, new_ips_sp);
 
     if (old != nullptr)
     {
-      auto *wrapper = new RcuMapWrapper();
       wrapper->map = old;
       call_rcu(&wrapper->rcu, free_map_callback);
     }
   }
 
 private:
+  unordered_map<string, string> data_;
   unordered_map<string, string> *ptr_{nullptr};
 };
 
-void benchmark_liburcu(
+void benchmark_liburcu_async(
     size_t num_readers,
     size_t num_writers,
     chrono::seconds test_duration,
@@ -485,8 +471,11 @@ void benchmark_liburcu(
 
   rcu_init();
 
-  LiburcuContainer container;
-  container.update(test_data_array[0]);
+  RcuMapWrapper wrapper;
+  std::vector<RcuMapWrapper> wrappers(300);
+
+  LiburcuContainerAsync container;
+  container.update(test_data_array[0].get(), &wrapper);
 
   atomic<bool> stop_flag{false};
   atomic<bool> start_flag{false};
@@ -530,21 +519,17 @@ void benchmark_liburcu(
   {
     writers.emplace_back([&, i]()
     {
-      rcu_register_thread();
-
-      size_t index = 0;
-
       while (!start_flag.load(memory_order_acquire))
         this_thread::yield();
 
+      size_t index = i;
       while (!stop_flag.load(memory_order_relaxed))
       {
-        container.update(test_data_array[index++]);
+        container.update(test_data_array[index].get(), &wrappers[index]);
+        index += num_writers;
         total_writes.fetch_add(1, memory_order_relaxed);
         this_thread::sleep_for(chrono::milliseconds(100));
       }
-
-      rcu_unregister_thread();
     });
   }
 
@@ -587,7 +572,7 @@ public:
 
   void update(shared_ptr<unordered_map<string, string>> new_ips)
   {
-    ips_ = std::move(new_ips);
+    ips_ = new_ips;
   }
 
 private:
@@ -647,14 +632,15 @@ void benchmark_reclaimer(
   {
     writers.emplace_back([&, i]()
     {
-      size_t index = 0;
+      size_t index = i;
 
       while (!start_flag.load(memory_order_acquire))
         this_thread::yield();
 
       while (!stop_flag.load(memory_order_relaxed))
       {
-        container.update(test_data_array[index++]);
+        container.update(test_data_array[index]);
+        index += num_writers;
         total_writes.fetch_add(1, memory_order_relaxed);
         this_thread::sleep_for(milliseconds(100));
       }
@@ -704,8 +690,6 @@ int main(int argc, char **argv)
 
   if (argc >= 2)
     gen_size = atoi(argv[1]);
-  if (argc >= 3)
-    num_runs = atoi(argv[2]);
 
   size_t num_readers = 10;
   size_t num_writers = 2;
@@ -717,7 +701,6 @@ int main(int argc, char **argv)
   cout << "- Writer thread  : " << num_writers << "\n";
   cout << "- test duration  : " << test_duration.count() << " sec\n";
   cout << "- Update period  : 100 ms\n";
-  cout << "- Number of runs : " << num_runs << "\n";
 
   cout << "generating test data...\n";
   auto test_ips = generate_test_ips(gen_size);
@@ -729,8 +712,8 @@ int main(int argc, char **argv)
   }
 
   vector<shared_ptr<unordered_map<string, string>>> test_data_array;
-  test_data_array.reserve(200);
-  for (int i = 0; i < 200; ++i)
+  test_data_array.reserve(220);
+  for (int i = 0; i < 220; ++i)
     test_data_array.push_back(make_shared<unordered_map<string, string>>(*test_data));
 
   cout << "Test data generation completed (200 copies)\n";
@@ -753,7 +736,7 @@ int main(int argc, char **argv)
     benchmark_liburcu_sync(num_readers, num_writers, test_duration, test_data_array, test_ips);
 
     flush_cache();
-    benchmark_liburcu(num_readers, num_writers, test_duration, test_data_array, test_ips);
+    benchmark_liburcu_async(num_readers, num_writers, test_duration, test_data_array, test_ips);
   }
 
   cout << "\n==================================\n";
