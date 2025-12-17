@@ -298,14 +298,11 @@ void test_reader_stability()
     while (!stop.load())
     {
       auto data1 = store.load();
-      int val1 = *data1;
-
       // The same load() call should return the same pointer
       auto data2 = store.load();
-      int val2 = *data2;
 
       // Values might differ due to version update, but should be consistent
-      assert(data1.operator *() == data2.operator *() || val1 <= val2);
+      assert(*data1 == *data2);
     }
   });
 

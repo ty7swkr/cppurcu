@@ -671,7 +671,7 @@ void benchmark_reclaimer(
 
 void flush_cache()
 {
-  const size_t cache_size = 32 * 1024 * 1024;
+  const size_t cache_size = 128 * 1024 * 1024;
   volatile char *dummy = new char[cache_size];
 
   for (size_t i = 0; i < cache_size; i += 64)
