@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <cppurcu/cache_line.h>
 #include <unordered_map>
 #include <memory>
 #include <functional>
@@ -60,9 +61,9 @@ protected:
    *       thread_local inline combination causing TLS guard redefinition errors.
    *       Original: `static thread_local inline std::unordered_map<uint64_t, T> storage_;`
    */
-  static std::unordered_map<uint64_t, T> &storage_()
+    static std::unordered_map<uint64_t, T> &storage_()
   {
-    static thread_local std::unordered_map<uint64_t, T> storage;
+    alignas(CACHE_LINE_SIZE) static thread_local std::unordered_map<uint64_t, T> storage;
     return storage;
   }
 

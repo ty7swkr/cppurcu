@@ -1,7 +1,7 @@
-CC      = g++
-#CC     = clang++-10
+CC = g++
+#CC = clang++
 
-TARGET		= rcu_bench
+TARGET	= rcu_bench
 SOURCES	= rcu_bench1.cpp
 
 ifeq ($(MAKECMDGOALS),liburcu)

@@ -8,12 +8,13 @@
 #pragma once
 
 #include <cppurcu/source.h>
+#include <cppurcu/cache_line.h>
 
 namespace cppurcu
 {
 
 template<typename T>
-struct alignas(64) tls_value_t
+struct alignas(CACHE_LINE_SIZE) tls_value_t
 {
   bool        init      = false;
   uint64_t    version   = 0;
