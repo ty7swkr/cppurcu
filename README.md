@@ -32,7 +32,7 @@ Therefore, memory is reclaimed when all references to all `std::shared_ptr` inst
 
 *Note2: Consequently, update calls are deadlock-free regardless of their location.*
 
-*Note3: That said, cppurcu is not a simple std::shared_ptr wrapper — it provides lock-free read-side access through RCU semantics, unlike std::shared_ptr which requires atomic reference count operations on every read.
+*Note3: That said, cppurcu is not a simple std::shared_ptr wrapper — it provides lock-free read-side access through RCU semantics, unlike std::shared_ptr which requires atomic reference count operations on every read.*
 
 ### Basic Usage
 ```cpp
