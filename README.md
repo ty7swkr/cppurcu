@@ -1,4 +1,4 @@
-# cppurcu
+# cppurcu <sub><sup>[🇰🇷 한국어](README.ko.md)</sup></sub>
 
 A simple implementation of the C++ RCU (read-copy-update) user-space library with RAII-based snapshot isolation, header-only and dependency-free, using only the C++17 standard library.
 <br>
