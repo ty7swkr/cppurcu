@@ -1,4 +1,4 @@
-# cppurcu <sub><sup>[English](README.md)</sup></sub>
+# cppurcu <sub><sup>[English](README.md) | [简体中文](README.zh-CN.md)</sup></sub>
 
 RAII 기반 스냅샷 격리를 제공하는 간단한 C++ RCU(read-copy-update) 유저스페이스 라이브러리 구현체로, 헤더 온리이며 외부 의존성 없이 C++17 표준 라이브러리만 사용합니다.
 <br>
