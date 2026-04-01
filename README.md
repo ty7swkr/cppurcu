@@ -236,13 +236,47 @@ When enabled, reclaimer_thread handles object destruction in the background:
 
 ## Tests
 
-The included tests compare three approaches:
+### Unit Tests
+
+The `test/` directory contains comprehensive unit tests covering correctness, thread safety, and memory management:
+
+| Target | Description | Sanitizer |
+|--------|-------------|-----------|
+| `unit_test` | Core functionality: basic operations, guard, snapshot isolation, scheduled release, reclaimer thread | None |
+| `unit_test_guard_pack` | `guard_pack` and structured binding tests | ASan + LSan + UBSan |
+| `unit_test_tsan` | Stress tests: thread explosion, rapid updates, huge objects, nested guards | ThreadSanitizer |
+| `unit_test_lausan` | Memory leak detection, nullptr handling, exception safety, scheduled release memory behavior | ASan + LSan + UBSan |
+
+> **Note:** Unit tests require Clang for sanitizer support (ThreadSanitizer, AddressSanitizer, LeakSanitizer).
+
+```bash
+cd test
+
+# Build all unit tests
+make
+
+# Build individual targets
+make test        # unit_test only
+make guard_pack  # guard_pack tests only
+make tsan        # ThreadSanitizer tests only
+make lsan        # Leak/Address sanitizer tests only
+
+# Run
+./unit_test
+./unit_test_guard_pack
+./unit_test_tsan
+./unit_test_lausan
+```
+
+### Benchmarks
+
+The benchmark compares three approaches:
 
 1. **std::mutex** - Traditional lock-based protection
 2. **cppurcu** - This library
 3. **liburcu** - Widely-used RCU library (optional)
 
-Run tests with different data sizes:
+Run benchmarks with different data sizes:
 ```bash
 ./rcu_bench 1000      # 1K items
 ./rcu_bench 100000    # 100K items

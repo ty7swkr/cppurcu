@@ -67,7 +67,8 @@ load(storage<Ts> &... storages)
 
 template<typename... Ts>
 [[deprecated("Use cppurcu::load() instead")]]
-auto make_guard_pack(storage<Ts> &... storages)
+auto
+make_guard_pack(storage<Ts> &... storages)
 {
   return make_guard_pack(storages.load()...);
 }
@@ -105,7 +106,8 @@ guard_pack<Ts...>
 make_guard_pack(guard<Ts> &&... guards) noexcept;
 
 template<typename... Ts>
-guard_pack<Ts...> make_guard_pack(guard<Ts> &... guards) = delete;
+guard_pack<Ts...>
+make_guard_pack(guard<Ts> &... guards) = delete;
 
 /**
  * @brief RAII guard pack for multiple guards
