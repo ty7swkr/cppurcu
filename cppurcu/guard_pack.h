@@ -62,7 +62,7 @@ template<typename... Ts>
 guard_pack<Ts...>
 load(storage<Ts> &... storages)
 {
-  return make_guard_pack(storages.load()...);
+  return guard_pack<Ts...>{storages.load()...};
 }
 
 template<typename... Ts>
@@ -70,7 +70,7 @@ template<typename... Ts>
 auto
 make_guard_pack(storage<Ts> &... storages)
 {
-  return make_guard_pack(storages.load()...);
+  return guard_pack<Ts...>{storages.load()...};
 }
 
 /**

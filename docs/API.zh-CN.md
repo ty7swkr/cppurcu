@@ -95,12 +95,11 @@ storage(std::shared_ptr<const T> init_value,
 {
   auto guard1 = storage.load();
   {
+    // 安排在退出最外层作用域(guard1 的)时释放，
+    // 即使 load_with_tls_release() 是通过 guard2 调用的。
     auto guard2 = storage.load_with_tls_release();
     if (guard2)
       guard2->method();
-
-    // TLS 缓存数据不会在此立即销毁，
-    // 而是安排在退出最外层作用域时销毁。
   }
 
   // `load_with_tls_release()` 安排的 TLS 缓存释放
@@ -120,7 +119,7 @@ storage(std::shared_ptr<const T> init_value,
 ### 方法
 
 **`template<std::size_t I> auto& get()`**
-- 通过编译时索引 I 访问 guard
+- 获取第 I 个 guard。I 是模板参数，在编译时确定
 
 **`static constexpr std::size_t size()`**
 - 返回 pack 中 guard 的数量
@@ -204,7 +203,7 @@ guard_pack<Ts...> make_guard_pack(guard<Ts>&&... guards);
 
 **`template<typename T> void push(std::shared_ptr<T> &&ptr)`**
 - 将对象排入后台销毁队列
-- 通常由 storage::load() 在数据更新时内部调用
+- 通常由 storage::update() / source::update() 在数据更新时内部调用
 
 **`std::thread::id thread_id() const`**
 - reclaimer_thread 的 ID

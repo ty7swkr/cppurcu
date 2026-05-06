@@ -1,40 +1,51 @@
-# cppurcu <sub><sup>[🇰🇷 한국어](README.ko.md) | [简体中文](README.zh-CN.md)</sup></sub>
+# cppurcu <sub><sup>[🇰🇷 한국어](README.ko.md) | [简体中文](README.zh-CN.md) </sup></sub>
 
 A simple implementation of the C++ RCU (read-copy-update) user-space library with RAII-based snapshot isolation, header-only and dependency-free, using only the C++17 standard library.
 <br>
+
+## **What is RCU?**
+
+RCU (Read-Copy-Update) is a synchronization technique for read-heavy workloads where `std::mutex`, `std::shared_mutex`, or spinlocks become scalability bottlenecks, enabling readers to read without locks while writers publish updated versions.
+
+In read-heavy workloads, the use of RCU algorithms commonly provides several-fold to 10x+ read-side performance improvements over lock-based synchronization.
 <br>
 
 ## Key Features
 
+> An easy-to-use modern C++ library with misuse-resistant snapshot isolation, simpler than `std::mutex`.
+
 - **Header-Only**: Works with standard library only, no external dependencies
 - **Lock-Free Reads**: Implemented so that contention is minimized on the read path after cache warm-up.
 - **Snapshot Isolation**: RAII guard pattern for snapshot isolation in the calling thread.<br>
-(guard_pack loads multiple storages in a single line.)
+  (guard_pack loads multiple storages in a single line.)
 - **No Data Duplication**: Data is not deep-copied per thread
 - **Optional Background Destruction**: reclaimer_thread can offload object destruction to a separate thread, reducing burden on reader threads
+<br>
 
 ## Performance
+
 For benchmark results, see [PERFORMANCE.md](docs/PERFORMANCE.md).
-<br>
 <br>
 
 ## Quick Start
+
 ### API Overview
+
 No reader registration, grace period management, or memory barriers required.<br>
+
 ```cpp
 storage = new_storage;      // Update example (std::shared_ptr<T> new_storage)
 auto data = storage.load(); // Returns guard object
 ```
-*Note1: Unlike traditional RCU, cppurcu does not directly reclaim the old data,
-but delegates reclamation to `std::shared_ptr`.
-The `std::shared_ptr` reference to the old object is released upon the first `load()` call within the scope.
-Therefore, memory is reclaimed when all references to all `std::shared_ptr` instances are released.*<br>
+
+*Note1: Unlike traditional RCU, cppurcu does not directly reclaim the old data, but delegates reclamation to `std::shared_ptr`. The `std::shared_ptr` reference to the old object is released upon the first `load()` call within the scope. Therefore, memory is reclaimed when all references to all `std::shared_ptr` instances are released.*<br>
 
 *Note2: Consequently, update calls are deadlock-free regardless of their location.*
 
 *Note3: That said, cppurcu is not a simple std::shared_ptr wrapper — it provides lock-free read-side access through RCU semantics, unlike std::shared_ptr which requires atomic reference count operations on every read.*
 
 ### Basic Usage
+
 ```cpp
 #include <cppurcu/cppurcu.h>
 #include <memory>
@@ -55,15 +66,19 @@ auto new_data = std::make_shared<std::map<std::string, std::string>>();
 (*new_data)["key"] = "value";
 storage = new_data; // or storage.update(new_data);
 ```
+
 **⚠️ Important:**
+
 - The `storage<T>` instance must outlive all threads that use it
 - Destroying `storage` while threads are still accessing it results in undefined behavior
-- Typically, declare `storage` as a global, static, or long-lived member variable
+- `storage` should be declared as a global, static, or long-lived member variable.
 
 ### Snapshot Isolation
+
 Even when multiple `storage::load()` calls occur across complex call chains within a specific scope in the same thread, or when data updates occur from other threads, all read operations within that thread are enforced to see the same data version.
 
 When all guards are destroyed, the next load() gets the updated version
+
 ```cpp
 {
   auto data = storage.load();    // Snapshot version 1
@@ -78,9 +93,11 @@ storage.update(new_data3);       // Update to version 3
   auto data = storage.load();    // Loads version 3
 }
 ```
+
 ### Multi-Storage Snapshot
 
 When you need to load (snapshot) multiple storages in a single line, you can use `cppurcu::load(storage<Ts>&...)` as follows:
+
 ```cpp
 #include <cppurcu/cppurcu.h>
 
@@ -89,16 +106,18 @@ auto storageA = cppurcu::create(...);
 auto storageB = cppurcu::create(...);
 auto storageC = cppurcu::create(...);
 
-// Load all – maintains the same snapshot point
+// Per-storage snapshot, held consistently within scope
 const auto &[a, b, c] = cppurcu::load(storageA, storageB, storageC);
 
-// All reads within this scope see consistent data,
+// For each storage, all reads within this scope see the same snapshot,
 // even if updates occur from other threads.
 a->lookup(...);
 b->query(...);
 c->find(...);
 ```
-If you need a consistent snapshot within a specific scope, you can write code like this:
+
+If you need per-storage snapshots held consistently within a specific scope, you can write code like this:
+
 ```cpp
 #include <cppurcu/cppurcu.h>
 ...........
@@ -107,20 +126,22 @@ If you need a consistent snapshot within a specific scope, you can write code li
   // or `guard<T>` object from storage<T>::load()
   auto pack = cppurcu::make_guard_pack(storageA.load(), storageB.load(), storageC.load());
   .....
-  // Even if storageA and storageC are used somewhere in the call chain 
+  // Even if storageA and storageC are used somewhere in the call chain
   // within the calculate(...) function,
-  // the pack maintains a consistent snapshot of storageA, B, and C.
+  // the pack holds each storage's snapshot consistently across the scope.
   my_class.calculate(...);
   .....
 }
 ```
 
 **Note:**<br>
+
 - Each storage is still versioned independently; `guard_pack` is an RAII helper for convenient multi-storage snapshot loading, not a cross-storage transaction mechanism.
 
 ### With Background Destruction (Optional)
 
 For objects with expensive destructors, you can use a reclaimer_thread to handle destruction in the background:
+
 ```cpp
 #include <cppurcu/cppurcu.h>
 
@@ -141,7 +162,9 @@ storage1 = new_data;
 auto data = storage1.load();
 
 ```
+
 **Note (behavior change)**<br>
+
 - Previously, the system used the `reclaimer_thread` (and its mutex) to handle the previous data when updating with new data.
 - Currently, the reader no longer uses the `reclaimer_thread` (or its mutex); the `reclaimer_thread` is only used by `storage<T>::update()`.
 <br>
@@ -151,6 +174,7 @@ auto data = storage1.load();
 For detailed API documentation, see [API.md](docs/API.md).
 
 Quick reference:
+
 - `cppurcu::storage<T>` - Main RCU-protected data storage
 - `cppurcu::guard<T>` - RAII guard for snapshot isolation
 - `cppurcu::guard_pack<Ts...>` - Multi-storage snapshot helper
@@ -201,12 +225,13 @@ make liburcu
 Main classes:
 
 1. **`storage<T>`**: User-facing API integrating source, local, and guard
-2. **`guard<T>`**: Return value of storage<T>::load(), RAII guard for snapshot isolation
+2. **`guard<T>`**: Return value of storage`<T>`::load(), RAII guard for snapshot isolation
 3. **`source<T>`**: Maintains the authoritative data and version counter
 4. **`local<T>`**: Thread-local caching (shallow copy only)
 5. **`reclaimer_thread (optional)`**: Background thread for handling object destruction.
 
 This design does not use:
+
 - ABA problem solutions (no tagged pointers)
 - Hazard pointers
 - Epoch-based reclaimer
@@ -214,15 +239,17 @@ This design does not use:
 ### Read Path
 
 When creating a guard (each `load()` call):
-1. Check cached version against source version (skipped if guard<T>.ref_count > 0 for snapshot isolation)
+
+1. Check cached version against source version (skipped if guard`<T>`::ref_count > 0 for snapshot isolation)
 2. If unchanged: return cached raw pointer (fast path)
-3. If changed: Updates the version, shared_ptr and raw pointers in the cache (slow path)
-<br>If reclaimer_thread enabled: push old value to reclaimer queue
+3. If changed: Updates the version, shared_ptr and raw pointers in the cache (slow path)<br>
+No reclaimer queue operation occurs on the read path.
 
 ### Reclaimer Thread (Optional)
 
 When enabled, reclaimer_thread handles object destruction in the background:
-1. storage::load() pushes old shared_ptrs to the reclaim queue when data is updated
+
+1. storage::update() pushes replaced shared_ptrs to the reclaim queue when data is updated
 2. Worker thread scans periodically and removes entries when unique()
 3. Non-unique objects remain in the queue until they become reclaimable
 4. Objects are destroyed without blocking readers, reducing overhead for expensive destructors
@@ -240,12 +267,12 @@ When enabled, reclaimer_thread handles object destruction in the background:
 
 The `test/` directory contains comprehensive unit tests covering correctness, thread safety, and memory management:
 
-| Target | Description | Sanitizer |
-|--------|-------------|-----------|
-| `unit_test` | Core functionality: basic operations, guard, snapshot isolation, scheduled release, reclaimer thread | None |
-| `unit_test_guard_pack` | `guard_pack` and structured binding tests | ASan + LSan + UBSan |
-| `unit_test_tsan` | Stress tests: thread explosion, rapid updates, huge objects, nested guards | ThreadSanitizer |
-| `unit_test_lausan` | Memory leak detection, nullptr handling, exception safety, scheduled release memory behavior | ASan + LSan + UBSan |
+| Target                   | Description                                                                                          | Sanitizer           |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------- |
+| `unit_test`            | Core functionality: basic operations, guard, snapshot isolation, scheduled release, reclaimer thread | None                |
+| `unit_test_guard_pack` | `guard_pack` and structured binding tests                                                          | ASan + LSan + UBSan |
+| `unit_test_tsan`       | Stress tests: thread explosion, rapid updates, huge objects, nested guards                           | ThreadSanitizer     |
+| `unit_test_lausan`     | Memory leak detection, nullptr handling, exception safety, scheduled release memory behavior         | ASan + LSan + UBSan |
 
 > **Note:** Unit tests require Clang for sanitizer support (ThreadSanitizer, AddressSanitizer, LeakSanitizer).
 
@@ -277,9 +304,9 @@ The benchmark compares three approaches:
 3. **liburcu** - Widely-used RCU library (optional)
 
 Run benchmarks with different data sizes:
+
 ```bash
 ./rcu_bench 1000      # 1K items
 ./rcu_bench 100000    # 100K items
 ./rcu_bench 1000000   # 1M items, memory required is 20GB
 ```
-
