@@ -97,7 +97,7 @@ storage.update(new_data3);       // 버전 3으로 업데이트
 
 ### 멀티 스토리지 스냅샷
 
-여러 스토리지를 한 줄로 로드(스냅샷)해야 할 때, `cppurcu::load(storage<Ts>&...)`를 다음과 같이 사용할 수 있습니다:
+여러 스토리지를 한 줄로 로드(스냅샷)해야 할 때, `cppurcu::load(const storage<Ts>&...)`를 다음과 같이 사용할 수 있습니다:
 
 ```cpp
 #include <cppurcu/cppurcu.h>

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cppurcu/storage.h>
+#include <algorithm>
 #include <cstddef>
 #include <new>
 #include <tuple>
@@ -60,7 +61,7 @@ class guard_pack;
  */
 template<typename... Ts>
 guard_pack<Ts...>
-load(storage<Ts> &... storages)
+load(const storage<Ts> &... storages)
 {
   return guard_pack<Ts...>{storages.load()...};
 }
@@ -68,7 +69,7 @@ load(storage<Ts> &... storages)
 template<typename... Ts>
 [[deprecated("Use cppurcu::load() instead")]]
 auto
-make_guard_pack(storage<Ts> &... storages)
+make_guard_pack(const storage<Ts> &... storages)
 {
   return guard_pack<Ts...>{storages.load()...};
 }

@@ -174,7 +174,7 @@ Factory function that creates a guard_pack from multiple storages.
 
 ```cpp
 template<typename... Ts>
-guard_pack<Ts...> load(storage<Ts>&... storages);
+guard_pack<Ts...> load(const storage<Ts>&... storages);
 ```
 
 ### Parameters
@@ -189,7 +189,7 @@ guard_pack<Ts...> load(storage<Ts>&... storages);
 
 Factory function that creates a guard_pack from multiple guards.
 
-> **Deprecated**: `make_guard_pack(storage<Ts>&...)` is deprecated. Use `cppurcu::load(storage<Ts>&...)` instead.
+> **Deprecated**: `make_guard_pack(const storage<Ts>&...)` is deprecated. Use `cppurcu::load(const storage<Ts>&...)` instead.
 
 ### Signature
 

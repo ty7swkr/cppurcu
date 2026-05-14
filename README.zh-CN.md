@@ -100,7 +100,7 @@ storage.update(new_data3);       // 更新到版本 3
 
 ### 多 Storage 快照
 
-当需要在一行中加载（快照）多个 storage 时，可以使用 `cppurcu::load(storage<Ts>&...)`:
+当需要在一行中加载（快照）多个 storage 时，可以使用 `cppurcu::load(const storage<Ts>&...)`:
 
 ```cpp
 #include <cppurcu/cppurcu.h>

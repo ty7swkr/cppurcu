@@ -77,7 +77,7 @@ public:
   // Return and use the guard object as if it were a load() function.
   // Using it directly without return (e.g., storage::load()->value)
   // does not provide snapshot isolation.
-  guard<T> load()
+  guard<T> load() const
   {
     return local_.load();
   }
@@ -102,7 +102,7 @@ public:
    * @see guard::tls_t::retain()
    * @see guard::tls_t::schedule_release()
    */
-  guard<T> load_with_tls_release()
+  guard<T> load_with_tls_release() const
   {
     return local_.load_with_release();
   }

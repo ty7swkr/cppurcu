@@ -96,7 +96,7 @@ storage.update(new_data3);       // Update to version 3
 
 ### Multi-Storage Snapshot
 
-When you need to load (snapshot) multiple storages in a single line, you can use `cppurcu::load(storage<Ts>&...)` as follows:
+When you need to load (snapshot) multiple storages in a single line, you can use `cppurcu::load(const storage<Ts>&...)` as follows:
 
 ```cpp
 #include <cppurcu/cppurcu.h>

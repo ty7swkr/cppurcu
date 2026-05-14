@@ -24,7 +24,7 @@ public:
   // Return and use the guard object as if it were a load() function.
   // Using it directly without return (ex. storage::load()->value)
   // can be dangerous because it does not isolate snapshots.
-  guard<T> load()
+  guard<T> load() const
   {
     auto &tls_value = tls_value_.ref();
     ensure_init(tls_value);
@@ -32,7 +32,7 @@ public:
     return guard<T>(tls_value, source_);
   }
 
-  guard<T> load_with_release()
+  guard<T> load_with_release() const
   {
     auto &tls_value = tls_value_.ref();
     ensure_init(tls_value);
@@ -41,7 +41,7 @@ public:
   }
 
 protected:
-  void ensure_init(tls_value_t<T> &tls_value)
+  void ensure_init(tls_value_t<T> &tls_value) const noexcept
   {
     if (tls_value.init == true)
       return;
@@ -54,7 +54,7 @@ protected:
   }
 
 protected:
-  tls_instance<tls_value_t<T>> tls_value_;
+  mutable tls_instance<tls_value_t<T>> tls_value_;
   const source<T> &source_;
 };
 

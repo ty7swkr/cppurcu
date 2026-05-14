@@ -148,7 +148,7 @@ c->method_c();
 ### 签名
 ```cpp
 template<typename... Ts>
-guard_pack<Ts...> load(storage<Ts>&... storages);
+guard_pack<Ts...> load(const storage<Ts>&... storages);
 ```
 
 ### 参数
@@ -161,7 +161,7 @@ guard_pack<Ts...> load(storage<Ts>&... storages);
 
 从多个 guard 创建 guard_pack 的工厂函数。
 
-> **已弃用**：`make_guard_pack(storage<Ts>&...)` 已弃用。请使用 `cppurcu::load(storage<Ts>&...)` 替代。
+> **已弃用**：`make_guard_pack(const storage<Ts>&...)` 已弃用。请使用 `cppurcu::load(const storage<Ts>&...)` 替代。
 
 ### 签名
 ```cpp

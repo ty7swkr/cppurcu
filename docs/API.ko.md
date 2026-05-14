@@ -172,7 +172,7 @@ c->method_c();
 
 ```cpp
 template<typename... Ts>
-guard_pack<Ts...> load(storage<Ts>&... storages);
+guard_pack<Ts...> load(const storage<Ts>&... storages);
 ```
 
 ### 매개변수
@@ -187,7 +187,7 @@ guard_pack<Ts...> load(storage<Ts>&... storages);
 
 여러 가드에서 guard_pack을 생성하는 팩토리 함수.
 
-> **사용 중단(Deprecated)**: `make_guard_pack(storage<Ts>&...)`는 사용 중단되었습니다. 대신 `cppurcu::load(storage<Ts>&...)`를 사용하세요.
+> **사용 중단(Deprecated)**: `make_guard_pack(const storage<Ts>&...)`는 사용 중단되었습니다. 대신 `cppurcu::load(const storage<Ts>&...)`를 사용하세요.
 
 ### 시그니처
 
